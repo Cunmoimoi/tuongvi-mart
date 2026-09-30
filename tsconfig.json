@@ -10,6 +10,9 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // Script trong scripts/ chạy trực tiếp bằng Node (ESM + type stripping), nên import
+    // giữa chúng phải ghi rõ đuôi .mts.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

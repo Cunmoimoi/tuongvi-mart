@@ -100,6 +100,11 @@ Lưu ý: Supabase Free tự tạm dừng project sau một thời gian không d�
 | N12 | Một website responsive (mobile-first) + PWA, chưa làm app native | App native chỉ cân nhắc sau mở bán khi có nhu cầu rõ (thông báo đẩy, tích điểm tại quầy bằng QR...). Khi đó thêm API `/api/v1` dùng token cho app; nghiệp vụ ở `src/server/modules` dùng lại nguyên vẹn |
 | N13 | Desktop dựng lại bố cục kingfoodmart.com theo ảnh chụp đo đạc; mobile thiết kế riêng | Dùng nhận diện riêng của Tường Vi Mart; các khác biệt có chủ đích ghi ở UI_SPEC mục 0.1 |
 | N14 | Danh mục nhiều cấp (tối đa 3), có banner và bộ sưu tập do admin quản lý | Bổ sung theo UI_SPEC mục 10 |
+| N15 | Mật khẩu role `app_runtime` không nằm trong migration | Migration chỉ có cấu trúc và phân quyền. Local đặt bằng `pnpm db:setup:local` (lấy từ `.env.local`); staging/production đặt tay. Nhờ vậy không có mật khẩu nào trong git |
+| N16 | Thu hồi quyền trên schema `app` cả với `service_role`, không chỉ `anon` và `authenticated` | `service_role` có `BYPASSRLS` nên RLS một mình không chặn được nó (DATA_MODEL mục 2) |
+| N17 | Bảng chỉ ghi thêm (ledger) dùng hàm SQL `app.make_append_only()` thay vì viết GRANT/REVOKE tay ở từng migration | Kèm `app.enable_app_rls()` và `app.attach_updated_at()`. Quy ước và ví dụ ở DATA_MODEL mục 2.1 |
+| N18 | Test quyền của `anon`/`authenticated` bằng `SET ROLE` chứ không kết nối trực tiếp | `anon` trong Supabase là `NOLOGIN`; Data API kết nối bằng `authenticator` rồi `SET ROLE`. Test mô phỏng đúng đường đó và chạy được cả ở CI. Role `app_runtime` thì test kết nối thật qua `DATABASE_URL` |
+| N19 | Migration phải luôn chạy bằng cùng một role | `ALTER DEFAULT PRIVILEGES` chỉ áp dụng cho đối tượng do role đã đặt nó tạo ra. `scripts/db-migrate.mts` dừng nếu role hiện tại không sở hữu schema `app` |
 
 ## 5. Câu hỏi mở
 

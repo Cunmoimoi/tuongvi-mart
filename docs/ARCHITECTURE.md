@@ -73,8 +73,13 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 .
 ├── CLAUDE.md
 ├── docs/
+├── drizzle.config.ts                # cấu hình drizzle-kit (chỉ dùng ở máy dev và CI)
 ├── drizzle/                         # migration sinh bởi drizzle-kit (commit vào git)
-├── scripts/
+├── supabase/config.toml             # cấu hình Supabase local (supabase start)
+├── scripts/                         # chạy trực tiếp bằng Node; file .mts để Node hiểu là ESM
+│   ├── lib/local-db-guard.mts       # chặn công cụ chạy nhầm vào database thật
+│   ├── db-migrate.mts               # áp dụng migration bằng DATABASE_MIGRATION_URL
+│   ├── db-set-local-password.mts    # đặt mật khẩu app_runtime ở local (chỉ APP_ENV=local)
 │   ├── create-admin.ts              # tạo admin đầu tiên (chạy tay, hỏi mật khẩu qua prompt)
 │   ├── seed-local.ts                # dữ liệu mẫu, từ chối chạy khi APP_ENV=production
 │   └── import-admin-units.ts        # nạp danh mục 34 tỉnh/thành + phường/xã

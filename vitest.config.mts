@@ -4,6 +4,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    // Chỉ unit test. Test tích hợp cần Postgres local nên chạy riêng bằng `pnpm test:int`
+    // (vitest.integration.config.mts), để `pnpm check` không phụ thuộc vào Docker.
+    include: ["src/**/*.test.ts"],
   },
   resolve: {
     alias: {

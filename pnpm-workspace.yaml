@@ -1,3 +1,6 @@
 allowBuilds:
+  # drizzle-kit dùng esbuild để nạp drizzle.config.ts; script install của esbuild
+  # chỉ chọn binary đúng nền tảng từ optional dependency, không tải thêm gì từ mạng.
+  esbuild: true
   sharp: false
   unrs-resolver: false
