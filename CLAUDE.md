@@ -30,7 +30,9 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 
 ## Lệnh
 
-- `pnpm dev`: chạy local (cần `supabase start` trước)
+- `pnpm dev`: chạy local (cần `pnpm db:start` trước)
+- `pnpm db:start` / `pnpm db:stop`: bật và tắt Supabase local trong Docker
+- `pnpm db:setup:local`: đặt mật khẩu role `app_runtime` trên database local (chỉ chạy khi `APP_ENV=local`)
 - `pnpm check`: lint + typecheck + unit test. BẮT BUỘC chạy trước khi báo xong task.
 - `pnpm test:int`: test tích hợp với database local
 - `pnpm test:e2e`: Playwright

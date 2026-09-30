@@ -13,11 +13,38 @@
 
 ## 2. Quyền database
 
-- Role `app_runtime` (ứng dụng dùng khi chạy): `USAGE` trên schema `app`; `SELECT, INSERT, UPDATE, DELETE` trên bảng nghiệp vụ; với bảng ledger chỉ `SELECT, INSERT` (riêng `bank_transactions` được UPDATE các cột `process_status`, `processed_at`, `order_id`, `exception_reason`, `attempts`). Không có quyền DDL.
+- Role `app_runtime` (ứng dụng dùng khi chạy): `USAGE` trên schema `app` và `extensions`; `SELECT, INSERT, UPDATE, DELETE` trên bảng nghiệp vụ; với bảng ledger chỉ `SELECT, INSERT` (riêng `bank_transactions` được UPDATE các cột `process_status`, `processed_at`, `order_id`, `exception_reason`, `attempts`). Không có quyền DDL.
 - Role migration (chủ sở hữu schema) chỉ dùng từ CI hoặc máy local, không cấu hình trên Vercel.
-- `anon` và `authenticated` (role của Supabase Data API): KHÔNG có `USAGE` trên schema `app`.
-- Bật RLS trên mọi bảng `app.*` làm lớp phòng thủ thứ hai, chỉ có policy `FOR ALL TO app_runtime USING (true) WITH CHECK (true)`.
+  Migration phải **luôn** chạy bằng cùng một role, vì `ALTER DEFAULT PRIVILEGES` chỉ áp dụng cho đối tượng do chính role đã đặt nó tạo ra. `scripts/db-migrate.mts` dừng lại nếu role đang chạy không phải chủ sở hữu schema `app`.
+- `anon`, `authenticated` và `service_role` (role của Supabase Data API): KHÔNG có `USAGE` trên schema `app`. `service_role` cũng bị thu hồi vì nó có `BYPASSRLS`, nên RLS một mình không chặn được nó.
+- Bật RLS trên mọi bảng `app.*` làm lớp phòng thủ thứ hai, chỉ có policy `FOR ALL TO app_runtime USING (true) WITH CHECK (true)`. Không dùng `FORCE ROW LEVEL SECURITY` để role migration vẫn nạp được dữ liệu seed.
 - Migration đầu tiên phải tạo role, grant, RLS; có test tích hợp kiểm tra `anon` không đọc được bảng nào.
+
+### 2.1 Quyền mặc định và các hàm dùng lại
+
+Migration nền (`drizzle/0000_foundation.sql`) đặt `ALTER DEFAULT PRIVILEGES` trong schema `app`, nên **bảng tạo về sau tự động** có `SELECT, INSERT, UPDATE, DELETE` cho `app_runtime`, sequence có `USAGE, SELECT`, và function mới bị thu hồi `EXECUTE` khỏi `PUBLIC`. Không cần viết lại GRANT trong từng migration.
+
+Sau mỗi `CREATE TABLE` trong schema `app`, gọi các hàm sau (chúng đã bị thu hồi `EXECUTE` khỏi `PUBLIC`, nên `app_runtime` không gọi được):
+
+| Hàm | Việc |
+|---|---|
+| `app.enable_app_rls('<bảng>')` | Bật RLS và tạo policy `app_runtime_all`. Gọi cho **mọi** bảng. |
+| `app.attach_updated_at('<bảng>')` | Gắn trigger `set_updated_at` (dùng `app.set_updated_at()`). Gọi cho bảng có cột `updated_at`. |
+| `app.make_append_only('<bảng>')` | Quy ước bảng ledger: thu hồi `UPDATE, DELETE, TRUNCATE` của `app_runtime`, chỉ còn `SELECT, INSERT`. |
+| `app.make_append_only('<bảng>', array['cột1','cột2'])` | Như trên nhưng cấp lại `UPDATE` theo từng cột. Chỉ dùng cho `bank_transactions`. |
+
+Ví dụ cho các bảng ledger ở mục 1:
+
+```sql
+select app.enable_app_rls('point_ledger');
+select app.make_append_only('point_ledger');
+
+select app.enable_app_rls('bank_transactions');
+select app.make_append_only(
+  'bank_transactions',
+  array['process_status', 'processed_at', 'order_id', 'exception_reason', 'attempts']
+);
+```
 
 ## 3. Danh mục và sản phẩm
 
