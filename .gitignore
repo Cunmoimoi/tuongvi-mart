@@ -1,0 +1,5 @@
+.env*
+!.env.example
+docs/reference/
+node_modules/
+.next/
