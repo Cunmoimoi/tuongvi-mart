@@ -9,5 +9,13 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
     },
+    // "server-only" chỉ export module rỗng dưới điều kiện "react-server";
+    // thêm điều kiện này để import "server-only" không ném lỗi khi chạy test.
+    conditions: ["react-server"],
+  },
+  ssr: {
+    resolve: {
+      conditions: ["react-server"],
+    },
   },
 });
