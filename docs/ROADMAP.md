@@ -66,6 +66,7 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 
 ### T0.7 CI
 - GitHub Actions: install → typecheck → lint → unit → khởi Postgres + migrate → integration → `pnpm audit --audit-level high` → gitleaks → build.
+- Câu hỏi mở: cách đặt mật khẩu role `app_runtime` cho CI (đề xuất: workflow tự đặt mật khẩu tạm, giữ nguyên guard nghiêm).
 - Nghiệm thu: PR mẫu chạy xanh; commit thử một chuỗi giống secret làm CI đỏ.
 
 ### T0.8 Bộ component giao diện
@@ -94,6 +95,7 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 - Route `api/auth-hooks/send-sms` nhận Send SMS Hook của Supabase, xác thực chữ ký hook bằng `SMS_HOOK_SECRET`, áp giới hạn gửi (BUSINESS_RULES mục 12), gọi `SmsPort`.
 - Adapter `console` cho local; adapter nhà cung cấp thật để `NotImplementedError` cho tới khi chủ dự án chọn nhà cung cấp.
 - Turnstile ở form đăng ký và quên mật khẩu.
+- Đặt `minimum_password_length = 8` trong `supabase/config.toml` (mặc định của Supabase CLI là 6, thấp hơn yêu cầu ở ARCHITECTURE mục 6).
 - Nghiệm thu: test chữ ký hook sai → từ chối; test vượt giới hạn không gọi `SmsPort`; test chỉ nhận đầu số di động Việt Nam.
 
 ### T1.3 Đăng ký, đăng nhập, quên mật khẩu (khách)
