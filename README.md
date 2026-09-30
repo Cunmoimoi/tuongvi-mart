@@ -65,6 +65,55 @@ Tắt database local khi không dùng nữa:
 pnpm db:stop
 ```
 
+## Bảo mật máy phát triển
+
+### Supabase CLI mở cổng ra cả mạng nội bộ
+
+Supabase CLI publish các cổng 54321–54327 vào `0.0.0.0` (mọi địa chỉ), không phải chỉ
+`127.0.0.1`. Nghĩa là mặc định, bất kỳ máy nào trong cùng mạng Wi-Fi hay LAN đều kết nối
+được tới Postgres ở cổng 54322 và Studio ở cổng 54323. `config.toml` không có tùy chọn đổi
+địa chỉ gắn, và khởi động lại bằng `pnpm db:stop` rồi `pnpm db:start` cũng không đổi được.
+
+**Đã xử lý trên máy phát triển bằng luật tường lửa Windows** chặn mọi kết nối inbound tới
+TCP 54321–54327:
+
+```
+New-NetFirewallRule -DisplayName "Chan Supabase local tu mang" -Direction Inbound -Protocol TCP -LocalPort 54321-54327 -Action Block -Profile Any
+```
+
+Luật này chỉ chặn kết nối **từ máy khác vào**; chính máy đang chạy Docker vẫn truy cập
+bình thường, và luật chặn thắng luật cho phép Docker.
+
+Lưu ý khi kiểm tra: cách này chặn ở tầng Windows chứ không đổi cách gắn cổng, nên
+`docker ps` **vẫn** hiện `0.0.0.0:54322->5432/tcp`. Đừng dùng `docker ps` để kết luận đã
+chặn hay chưa. Kiểm tra đúng chỗ bằng:
+
+```
+Get-NetFirewallRule -DisplayName "Chan Supabase local tu mang" | Select-Object Direction, Action, Enabled
+```
+
+Gỡ luật khi cần: `Remove-NetFirewallRule -DisplayName "Chan Supabase local tu mang"`.
+
+Cách thay thế (chưa dùng): trong Docker Desktop, Settings → Docker Engine, thêm
+`"ip": "127.0.0.1"` vào JSON rồi Apply & restart. Cách này đổi thật cách gắn cổng cho mọi
+container, nên `docker ps` sẽ hiện `127.0.0.1:54322->5432/tcp`.
+
+Khi dựng máy phát triển mới, phải làm lại một trong hai cách trên — đây là cấu hình máy,
+không nằm trong repo.
+
+### Khi dùng Wi-Fi công cộng
+
+Chạy `pnpm db:stop` trước khi nối vào Wi-Fi quán cà phê, sân bay, khách sạn hay mạng lạ
+nói chung. Ở nhà sau router thì rủi ro thấp, nhưng trên mạng công cộng thì database đang
+mở là mở cho mọi người cùng mạng.
+
+### Mật khẩu mặc định của Supabase local
+
+Supabase local luôn dùng `postgres/postgres` cho role `postgres`, cùng với anon key,
+service key và JWT secret cố định mà ai cũng biết. Đây là giá trị demo dùng chung cho mọi
+project Supabase local, **chỉ an toàn trên máy dev**. Không bao giờ dùng lại chúng ở
+staging hay production, và không coi database local là chỗ chứa dữ liệu thật của khách.
+
 ## Lệnh hay dùng
 
 | Lệnh             | Việc gì                                                                                   |
