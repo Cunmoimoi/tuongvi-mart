@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens theo docs/UI_SPEC.md mục 2.1 (màu) và 2.3 (bo góc, khác).
+ * Font chữ (Be Vietnam Pro qua next/font) sẽ cấu hình ở task T0.8.
+ */
+@theme {
+  --color-brand: #15803d;
+  --color-brand-dark: #0d4022;
+
+  --color-primary: #16a34a;
+  --color-primary-hover: #15803d;
+  --color-primary-soft: #dcfce7;
+  --color-primary-softer: #f0fdf4;
+
+  --color-sale: #ea580c;
+  --color-sale-soft: #fff1e6;
+
+  --color-badge-discount-bg: #fcd34d;
+  --color-badge-discount-fg: #1f2937;
+
+  --color-danger: #dc2626;
+  --color-success: #15803d;
+  --color-success-soft: #dcfce7;
+
+  --color-text: #1f2937;
+  --color-text-2: #374151;
+  --color-muted: #6b7280;
+  --color-faint: #9ca3af;
+
+  --color-border: #e5e7eb;
+  --color-surface: #ffffff;
+  --color-page-bg: #f3f4f6;
+  --color-overlay: rgb(0 0 0 / 0.4);
+
+  --radius-badge: 4px;
+  --radius-card: 8px;
+  --radius-banner: 12px;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+body {
+  background-color: var(--color-page-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
