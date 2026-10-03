@@ -105,6 +105,9 @@ Lưu ý: Supabase Free tự tạm dừng project sau một thời gian không d�
 | N17 | Bảng chỉ ghi thêm (ledger) dùng hàm SQL `app.make_append_only()` thay vì viết GRANT/REVOKE tay ở từng migration | Kèm `app.enable_app_rls()` và `app.attach_updated_at()`. Quy ước và ví dụ ở DATA_MODEL mục 2.1 |
 | N18 | Test quyền của `anon`/`authenticated` bằng `SET ROLE` chứ không kết nối trực tiếp | `anon` trong Supabase là `NOLOGIN`; Data API kết nối bằng `authenticator` rồi `SET ROLE`. Test mô phỏng đúng đường đó và chạy được cả ở CI. Role `app_runtime` thì test kết nối thật qua `DATABASE_URL` |
 | N19 | Migration phải luôn chạy bằng cùng một role | `ALTER DEFAULT PRIVILEGES` chỉ áp dụng cho đối tượng do role đã đặt nó tạo ra. `scripts/db-migrate.mts` dừng nếu role hiện tại không sở hữu schema `app` |
+| N20 | Logger bỏ hẳn (không thay bằng `[REDACTED]`) mọi khóa nhạy cảm, khớp theo chuỗi con của tên khóa đã chuẩn hóa | Ngoài `password`, `token`, `otp`, `secret`, `authorization`, `cookie` còn có `passwd`, `apikey`, `signature` và `pin` (PIN bàn giao, chỉ khớp cả khóa hoặc đuôi như `handoverPin`). SĐT được che cả theo giá trị lẫn theo tên khóa, định dạng giữ 3 ký tự đầu và 3 ký tự cuối: `0901234567` thành `090****567` (ROADMAP T0.4). Ví dụ `09******123` trong CLAUDE.md bất biến 14 chỉ minh họa kiểu che |
+| N21 | `rate_limits`: cửa sổ cố định căn theo UTC; lượt bị từ chối vẫn được đếm; không gọi trong transaction nghiệp vụ | Nếu transaction nghiệp vụ rollback thì lượt đếm cũng mất, kẻ tấn công có thể cố tình gây rollback để né giới hạn, nên luôn truyền `getDb()`. Thêm `created_at` (DATA_MODEL mục 1) và hai `CHECK` so với bản mô tả ban đầu. Cửa sổ cố định cho phép tối đa 2 lần ngưỡng ngay ranh giới hai cửa sổ |
+| N22 | Thư viện lõi chọn hướng "đóng cửa khi lỗi" | `safeEqual` băm SHA-256 trước `timingSafeEqual` (không ném lỗi khi khác độ dài, không lộ độ dài) và trả `false` với `null`/`undefined`; `randomToken` từ chối dưới 16 byte; `mulDiv` bắt buộc người gọi chọn `floor`/`ceil` thay vì có mặc định; `clock.ts` không có `setClock()` toàn cục, hàm cần giờ nhận `Clock` qua tham số |
 
 ## 5. Câu hỏi mở
 
@@ -126,3 +129,4 @@ Claude Code sẽ dùng giá trị mặc định cho tới khi bạn trả lời.
 | Q12 | Kênh nhận cảnh báo của chủ shop: Telegram, Zalo hay email? | Telegram |
 | Q13 | Hình thức kinh doanh: hộ kinh doanh hay công ty? | Chưa rõ (ảnh hưởng thông tin chân trang và hóa đơn) |
 | Q14 | Production chạy trên dịch vụ quản lý sẵn (Vercel Pro + Supabase Pro) hay VPS tự quản (rẻ hơn, phải tự lo backup, vá lỗi, bảo mật máy chủ)? | Quyết định trước giai đoạn 7; mặc định dịch vụ quản lý sẵn |
+| Q15 | Giới hạn "theo ngày" (OTP 5 lần/ngày/SĐT, 20 lần/ngày/IP): đếm lại lúc 0h giờ Việt Nam, hay cứ 24 giờ liên tục kể từ lần đầu? | Cửa sổ 24 giờ căn theo UTC, tức đếm lại lúc 7h sáng giờ Việt Nam. Muốn 0h giờ Việt Nam thì thêm độ lệch múi giờ vào `getWindowStart` |

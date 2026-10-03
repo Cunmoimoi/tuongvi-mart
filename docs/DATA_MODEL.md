@@ -134,7 +134,7 @@ KHÔNG chứa thông tin tài khoản nhận tiền.
 
 **audit_logs** (chỉ INSERT): `id`, `actor_type`, `actor_id`, `action` (vd `product.update`, `refund.complete`, `staff.deactivate`, `auth.login_failed`), `entity_type`, `entity_id`, `before jsonb` và `after jsonb` (đã che dữ liệu nhạy cảm), `ip inet`, `user_agent`, `request_id`, `created_at`. Index `(entity_type, entity_id)`, `(actor_id, created_at)`, `(action, created_at)`.
 
-**rate_limits**: `key text`, `window_start timestamptz`, `count int`, PK `(key, window_start)`. Tăng bằng `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count`.
+**rate_limits**: `key text` (1–256 ký tự), `window_start timestamptz`, `count int` (`CHECK > 0`), `created_at timestamptz`, PK `(key, window_start)`. Cửa sổ cố định, căn theo mốc Unix epoch (UTC). Tăng bằng `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count` (hàm `consumeRateLimit` trong `server/lib/rate-limit.ts`). Không phải bảng ledger: `app_runtime` được UPDATE và DELETE để cron `cleanup` xóa các dòng cũ.
 
 **analytics_events**: `id bigint identity`, `session_id uuid`, `customer_id NULL` (chỉ ghi khi `consent_analytics = true`), `type` (`PRODUCT_VIEW` | `DWELL` | `SEARCH` | `CATEGORY_VIEW` | `ADD_TO_CART` | `CHECKOUT_START` | `PURCHASE`), `product_id NULL`, `category_id NULL`, `query text NULL` (cắt 100 ký tự), `value int NULL`, `created_at`. Giữ 12 tháng. Index `(type, created_at)`, `(product_id, created_at)`.
 
