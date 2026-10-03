@@ -116,24 +116,24 @@ staging hay production, và không coi database local là chỗ chứa dữ li�
 
 ## Lệnh hay dùng
 
-| Lệnh             | Việc gì                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------- |
-| `pnpm dev`       | Chạy server phát triển                                                                    |
-| `pnpm build`     | Build production                                                                          |
-| `pnpm check`     | Lint + kiểm tra kiểu dữ liệu + unit test. Bắt buộc chạy xanh trước khi báo xong một task. |
-| `pnpm lint`      | Chỉ chạy ESLint                                                                           |
-| `pnpm typecheck` | Chỉ chạy kiểm tra kiểu dữ liệu TypeScript                                                 |
-| `pnpm test`      | Chỉ chạy unit test (Vitest)                                                               |
+| Lệnh             | Việc gì                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm dev`       | Chạy server phát triển                                                                     |
+| `pnpm build`     | Build production                                                                           |
+| `pnpm check`     | Lint + kiểm tra kiểu dữ liệu + unit test. Bắt buộc chạy xanh trước khi báo xong một task.  |
+| `pnpm lint`      | Chỉ chạy ESLint                                                                            |
+| `pnpm typecheck` | Chỉ chạy kiểm tra kiểu dữ liệu TypeScript                                                  |
+| `pnpm test`      | Chỉ chạy unit test (Vitest)                                                                |
 | `pnpm test:int`  | Test tích hợp với Postgres local. Từ chối chạy nếu không chắc đang trỏ vào database local. |
-| `pnpm format`    | Định dạng lại code bằng Prettier                                                          |
+| `pnpm format`    | Định dạng lại code bằng Prettier                                                           |
 
-| Lệnh database          | Việc gì                                                                  |
-| ---------------------- | ------------------------------------------------------------------------ |
-| `pnpm db:start`        | Bật Supabase local trong Docker                                          |
-| `pnpm db:stop`         | Tắt Supabase local                                                       |
-| `pnpm db:migrate`      | Áp dụng migration Drizzle bằng `DATABASE_MIGRATION_URL`                  |
-| `pnpm db:generate`     | Sinh migration mới từ schema Drizzle                                     |
-| `pnpm db:setup:local`  | Đặt mật khẩu role `app_runtime` trên database local (chỉ `APP_ENV=local`) |
+| Lệnh database         | Việc gì                                                                   |
+| --------------------- | ------------------------------------------------------------------------- |
+| `pnpm db:start`       | Bật Supabase local trong Docker                                           |
+| `pnpm db:stop`        | Tắt Supabase local                                                        |
+| `pnpm db:migrate`     | Áp dụng migration Drizzle bằng `DATABASE_MIGRATION_URL`                   |
+| `pnpm db:generate`    | Sinh migration mới từ schema Drizzle                                      |
+| `pnpm db:setup:local` | Đặt mật khẩu role `app_runtime` trên database local (chỉ `APP_ENV=local`) |
 
 `pnpm test:int` và `pnpm db:setup:local` đều dừng lại nếu `APP_ENV` không phải `local`/`test`
 hoặc nếu chuỗi kết nối không trỏ tới `localhost`/`127.0.0.1`. Test tích hợp tạo rồi xóa bảng
