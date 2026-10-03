@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseEnv } from "@/server/env";
+import { isProductionLike, parseEnv } from "@/server/env";
 
 function baseEnv(overrides: Record<string, string | undefined> = {}) {
   return {
@@ -122,5 +122,16 @@ describe("parseEnv", () => {
     const env = parseEnv(baseEnv({ APP_ENV: "local" }));
     expect(env.SMS_PROVIDER).toBe("console");
     expect(env.STORAGE_PROVIDER).toBe("memory");
+  });
+});
+
+describe("isProductionLike", () => {
+  it.each([
+    ["staging", true],
+    ["production", true],
+    ["local", false],
+    ["test", false],
+  ] as const)("APP_ENV=%s → %s", (appEnv, expected) => {
+    expect(isProductionLike(appEnv)).toBe(expected);
   });
 });
