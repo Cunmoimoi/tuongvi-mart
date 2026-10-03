@@ -123,6 +123,7 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │       ├── db/ client.ts  schema/*.ts  tx.ts
 │       ├── auth/ port.ts  supabase.adapter.ts  session.ts  guards.ts
 │       ├── lib/ errors.ts  logger.ts  rate-limit.ts  tokens.ts  money.ts  clock.ts  vietqr.ts  safe-equal.ts
+│       ├── security/ headers.ts                 # hàm thuần dựng CSP + header bảo mật; middleware.ts gọi
 │       ├── adapters/                            # "Switchboard"
 │       │   ├── payment/ index.ts  sepay.ts  fake.ts
 │       │   ├── sms/ index.ts  console.ts  esms.ts (hoặc nhà cung cấp được chọn)
@@ -275,7 +276,8 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
 ## 11. Hiển thị, SEO, hiệu năng
 
 - Trang public (trang chủ, danh mục, sản phẩm) là Server Component, có `generateMetadata`, `sitemap.ts`, `robots.ts`, JSON-LD `Product`.
-- CSP dùng nonce nên trang render động. Dùng cache dữ liệu (`unstable_cache` hoặc tương đương, có tag để invalidate khi admin sửa sản phẩm) để giảm tải database.
+- CSP dùng nonce nên MỌI trang render động: root layout gọi `await connection()` để Next.js gắn nonce lúc render theo request (trang tĩnh dựng lúc build không có nonce, script của chính Next.js sẽ bị chặn). Hệ quả: HTML có `Cache-Control: private, no-cache, no-store`, CDN không cache HTML, mỗi lượt xem tốn một lần render; file `/_next/static` vẫn cache vĩnh viễn. Bù bằng cache dữ liệu (`unstable_cache` hoặc tương đương, có tag để invalidate khi admin sửa sản phẩm) để giảm tải database.
+- Next.js 16 đổi tên convention `middleware` thành `proxy` (bản cũ deprecated, build có cảnh báo). Dự án giữ `src/middleware.ts`; chuyển sang `proxy.ts` là việc riêng (xem N26).
 - Ảnh qua `next/image`, `remotePatterns` chỉ cho phép domain Supabase Storage của dự án.
 - Tìm kiếm: Postgres full-text + `unaccent` + `pg_trgm` để gõ không dấu vẫn ra ("banh mi" → "Bánh mì").
 - Viewport cho phép phóng to (không đặt `maximumScale`, `userScalable`).
