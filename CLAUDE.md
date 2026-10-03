@@ -6,6 +6,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 ## Đọc gì trước khi làm
 
 - Mỗi phiên làm việc chỉ làm một task trong `docs/ROADMAP.md`. Đọc kỹ task đó trước khi viết code.
+- Đọc `docs/PROGRESS.md` để biết task nào đã xong, đang dở.
 - Đọc thêm tài liệu liên quan tới task:
   - `docs/ARCHITECTURE.md`: kiến trúc, cấu trúc thư mục, hạ tầng, biến môi trường
   - `docs/DATA_MODEL.md`: bảng, ràng buộc, index, quyền database
@@ -61,6 +62,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 15. Số tài khoản nhận tiền chỉ lấy từ biến môi trường server, không cho sửa qua giao diện admin.
 16. Rate limit cho: đăng nhập, gửi OTP, checkout, tra trạng thái đơn, nhập PIN bàn giao, webhook (mức nới lỏng).
 17. So sánh chữ ký, token, PIN bằng `crypto.timingSafeEqual` (qua helper `safeEqual`). Token sinh bằng `crypto.randomBytes`/`randomInt`, không dùng `Math.random`.
+18. Không đọc, không in, không sao chép nội dung bất kỳ file `.env*` nào, kể cả trong `../tuongvi-legacy`. Chỉ được kiểm tra xem file có tồn tại hay không.
 
 ## Quy ước code
 
@@ -77,6 +79,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 ## Cách làm việc
 
 - Tạo nhánh `task/<mã-task>-<mô-tả-ngắn>` cho mỗi task.
+- Khi kết thúc task, cập nhật `docs/PROGRESS.md` trong cùng PR.
 - Với logic tiền, kho, điểm, trạng thái, bảo mật: viết test trước, rồi mới viết code.
 - Một task chỉ xong khi đạt TẤT CẢ tiêu chí "Nghiệm thu" trong ROADMAP và `pnpm check` + `pnpm test:int` đều xanh.
 - Kết thúc task, báo cáo ngắn: đã làm gì, test nào chứng minh, việc còn lại, rủi ro phát hiện thêm.
