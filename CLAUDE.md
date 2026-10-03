@@ -36,6 +36,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 - `pnpm db:setup:local`: đặt mật khẩu role `app_runtime` trên database local (chỉ chạy khi `APP_ENV=local`)
 - `pnpm check`: lint + typecheck + unit test. BẮT BUỘC chạy trước khi báo xong task.
 - `pnpm test:int`: test tích hợp với database local
+- `pnpm test:http`: test header bảo mật bằng cách gọi HTTP vào server `next start` thật (cần `pnpm build` trước, không nằm trong `pnpm check`)
 - `pnpm test:e2e`: Playwright
 - `pnpm db:generate` / `pnpm db:migrate`: tạo và áp dụng migration Drizzle
 - `pnpm db:seed:local`: dữ liệu mẫu CHỈ cho local (script trong `scripts/`, từ chối chạy nếu `APP_ENV=production`)
@@ -58,7 +59,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 11. Mọi thao tác ghi của admin/staff và mọi sự kiện bảo mật đều ghi `audit_logs` (bảng chỉ INSERT).
 12. Không dùng `dangerouslySetInnerHTML` (ngoại lệ: JSON-LD qua hàm serialize an toàn đã có test). Không cho upload SVG.
 13. Truy vấn database chỉ qua Drizzle trong `repo.ts`. Không nối chuỗi SQL. SQL thô (template `` sql`...` `` của Drizzle) chỉ dùng với tham số, không nối chuỗi.
-14. Log không chứa mật khẩu, token, OTP, secret; SĐT phải che (`09******123`); không log nguyên body webhook ra console.
+14. Log không chứa mật khẩu, token, OTP, secret; SĐT phải che (`090****567`); không log nguyên body webhook ra console.
 15. Số tài khoản nhận tiền chỉ lấy từ biến môi trường server, không cho sửa qua giao diện admin.
 16. Rate limit cho: đăng nhập, gửi OTP, checkout, tra trạng thái đơn, nhập PIN bàn giao, webhook (mức nới lỏng).
 17. So sánh chữ ký, token, PIN bằng `crypto.timingSafeEqual` (qua helper `safeEqual`). Token sinh bằng `crypto.randomBytes`/`randomInt`, không dùng `Math.random`.

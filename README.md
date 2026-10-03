@@ -125,6 +125,7 @@ staging hay production, và không coi database local là chỗ chứa dữ li�
 | `pnpm typecheck` | Chỉ chạy kiểm tra kiểu dữ liệu TypeScript                                                  |
 | `pnpm test`      | Chỉ chạy unit test (Vitest)                                                                |
 | `pnpm test:int`  | Test tích hợp với Postgres local. Từ chối chạy nếu không chắc đang trỏ vào database local. |
+| `pnpm test:http` | Test header bảo mật trên server build thật. Chạy `pnpm build` trước.                       |
 | `pnpm format`    | Định dạng lại code bằng Prettier                                                           |
 
 | Lệnh database         | Việc gì                                                                   |

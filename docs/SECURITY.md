@@ -48,15 +48,21 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
 - Xuất CSV: thoát công thức (ô bắt đầu bằng `=`, `+`, `-`, `@` thì thêm `'`).
 - Nhập Excel: parse ở server, giới hạn dòng và dung lượng, validate từng dòng, xem trước rồi mới ghi trong một transaction. Không dùng gói `xlsx` bản trên npm registry (bản cũ, có lỗ hổng đã biết); dùng `exceljs` hoặc bản SheetJS phát hành từ kênh chính thức của họ, có ghi rõ phiên bản.
 
-### HTTP headers (đặt trong `middleware.ts` / `next.config`)
-- `Content-Security-Policy` với nonce theo request:
-  `default-src 'self'; script-src 'self' 'nonce-{n}' 'strict-dynamic' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://<project>.supabase.co; connect-src 'self' https://*.ingest.sentry.io; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests`
-  (điều chỉnh khi thêm dịch vụ; mọi thay đổi CSP phải ghi lý do).
-- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`
+### HTTP headers (gắn bởi `src/middleware.ts`, dựng bởi hàm thuần `src/server/security/headers.ts`)
+- `Content-Security-Policy` với nonce 128 bit mới cho từng request (Web Crypto, không dùng `Math.random`):
+  `default-src 'self'; script-src 'self' 'nonce-{n}' 'strict-dynamic' [turnstile]; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: [supabase]; connect-src 'self' [sentry]; frame-src [turnstile hoặc 'none']; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; [upgrade-insecure-requests]`
+  - Domain ngoài lấy từ biến môi trường, không viết cứng: `[supabase]` là origin của `SUPABASE_URL`; `[sentry]` là đúng host ingest trong `SENTRY_DSN`; `[turnstile]` là `https://challenges.cloudflare.com`, chỉ mở khi `CAPTCHA_PROVIDER=turnstile` và có `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. Biến thiếu hoặc không hợp lệ thì bỏ nguồn đó (`frame-src` thành `'none'`): CSP chỉ chặt hơn, không bao giờ lỏng hơn.
+  - `script-src` ở staging và production KHÔNG có `'unsafe-eval'` và `'unsafe-inline'`. `style-src` giữ `'unsafe-inline'` vì thuộc tính `style` của React/Tailwind; đây là ngoại lệ có chủ đích, chỉ cho style.
+  - `'unsafe-eval'` chỉ được thêm khi `APP_ENV=local` và `NODE_ENV=development` (`next dev`; công cụ debug của React cần), qua hàm riêng `relaxCspForDevelopment`. Bản build production chạy với `APP_ENV=local` cũng không bị nới.
+  - `upgrade-insecure-requests` chỉ gửi ở staging/production để bản local chạy `http://localhost` không bị ép lên https.
+  - Thêm dịch vụ mới thì sửa `headers.ts` và test "khớp đúng bản đã duyệt"; mọi thay đổi CSP phải ghi lý do ở "Nhật ký quyết định" (`docs/README.md`). Việc đã biết trước: tile bản đồ OSM vào `img-src` (T1.4); upload ảnh bằng signed URL cần thêm Supabase vào `connect-src` (giai đoạn quản lý sản phẩm).
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`, chỉ gửi khi `APP_ENV` là `staging` hoặc `production`. Không gửi ở local/test vì trình duyệt sẽ nhớ "chỉ dùng https" cho `localhost` tới 2 năm. Chỉ nộp domain lên danh sách preload (hstspreload.org) khi chắc chắn mọi subdomain đều chạy https.
 - `X-Content-Type-Options: nosniff`
-- `Referrer-Policy: strict-origin-when-cross-origin` (trang có token trên URL: `no-referrer`)
+- `Referrer-Policy: strict-origin-when-cross-origin` (trang có token trên URL: `no-referrer`; các trang đó chưa có, làm cùng trang đơn hàng)
 - `Permissions-Policy: camera=(self), geolocation=(self), microphone=(), payment=()`
-- Tắt header `X-Powered-By`.
+- Tắt header `X-Powered-By` (`poweredByHeader: false`).
+- Phạm vi: middleware bỏ qua `/_next/static`, `/_next/image`, `favicon.ico` và request prefetch (theo hướng dẫn CSP của Next.js), nên các file tĩnh đó không có header ở trên. Tài liệu HTML, trang 404 và route API đều có.
+- Test: `src/server/security/headers.test.ts` (hàm thuần), `src/middleware.test.ts` (nối env), `pnpm test:http` (server build thật).
 
 ### Secret
 - Lưu trong Vercel Environment Variables, tách biệt Preview/Production. Không bao giờ commit `.env*` (chỉ commit `.env.example` không có giá trị).
