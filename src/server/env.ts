@@ -104,8 +104,18 @@ const envSchema = rawEnvSchema.superRefine((value, ctx) => {
 
 export type Env = RawEnv;
 
+// File .env sao chép từ .env.example thường để trống biến chưa dùng (`SEPAY_API_TOKEN=`). Coi chuỗi
+// rỗng như chưa đặt: biến tùy chọn thành undefined, biến bắt buộc vẫn báo thiếu, và ở
+// staging/production các biến trong REQUIRED_ONLY_IN_PRODUCTION_LIKE vẫn bị từ chối (kiểm tra
+// bằng `!value[key]`). Nhờ vậy local không sập vì giá trị trống mà production không dễ dãi hơn.
+function treatEmptyAsUnset(
+  raw: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, value || undefined]));
+}
+
 export function parseEnv(raw: Record<string, string | undefined>): Env {
-  const result = envSchema.safeParse(raw);
+  const result = envSchema.safeParse(treatEmptyAsUnset(raw));
   if (!result.success) {
     const details = result.error.issues
       .map((issue) => `- ${issue.path.join(".") || "(gốc)"}: ${issue.message}`)
