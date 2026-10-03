@@ -34,13 +34,16 @@ const CONFIGURED_SERVICES: Record<string, string> = {
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: "test-turnstile-site-key",
 };
 
-// Cấu hình thiếu/hỏng: SUPABASE_URL không dùng được, không Sentry, không Turnstile.
-// CSP phải chặt hơn, không được đoán domain.
+// Cấu hình không dùng được: SUPABASE_URL không phải http(s), không Sentry, không Turnstile. CSP phải
+// chặt hơn, không được đoán domain. (Trường hợp biến hoàn toàn vắng mặt do unit test phủ: .env.local
+// trên máy dev sẽ tự điền vào biến vắng mặt nên không dựng được ở đây. Còn SUPABASE_URL sai
+// định dạng thì `next.config.ts` đã từ chối khởi động.)
 const UNCONFIGURED_SERVICES: Record<string, string> = {
-  SUPABASE_URL: "khong-phai-url",
+  SUPABASE_URL: "ftp://khong-dung-duoc.example.test",
   SENTRY_DSN: "",
   CAPTCHA_PROVIDER: "always-pass",
-  NEXT_PUBLIC_TURNSTILE_SITE_KEY: "",
+  // Có site key nhưng nhà cung cấp là always-pass: Turnstile vẫn phải đóng.
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: "test-turnstile-site-key",
 };
 
 const SCENARIOS = {

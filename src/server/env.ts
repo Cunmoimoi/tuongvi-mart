@@ -2,9 +2,14 @@ import "server-only";
 import { z } from "zod";
 
 const APP_ENVS = ["local", "test", "staging", "production"] as const;
-type AppEnv = (typeof APP_ENVS)[number];
+export type AppEnv = (typeof APP_ENVS)[number];
 
 const PRODUCTION_LIKE_ENVS: readonly AppEnv[] = ["staging", "production"];
+
+// Một nơi duy nhất định nghĩa "môi trường giống production" để env.ts, HSTS và CSP không lệch nhau.
+export function isProductionLike(appEnv: AppEnv): boolean {
+  return PRODUCTION_LIKE_ENVS.includes(appEnv);
+}
 
 const rawEnvSchema = z.object({
   APP_ENV: z.enum(APP_ENVS),
@@ -72,7 +77,7 @@ const MOCK_PROVIDER_VALUES: readonly [keyof RawEnv, string][] = [
 ];
 
 const envSchema = rawEnvSchema.superRefine((value, ctx) => {
-  if (!PRODUCTION_LIKE_ENVS.includes(value.APP_ENV)) {
+  if (!isProductionLike(value.APP_ENV)) {
     return;
   }
 
