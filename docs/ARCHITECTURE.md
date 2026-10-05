@@ -41,7 +41,7 @@ flowchart LR
     Admin["Trang quản trị"]
   end
   subgraph Vercel["Vercel: Next.js"]
-    MW["middleware.ts: CSP nonce, làm mới phiên"]
+    MW["proxy.ts: CSP nonce, làm mới phiên"]
     RSC["Server Components + Server Actions"]
     API["Route Handlers: webhook, cron, status"]
     SVC["src/server/modules: nghiệp vụ"]
@@ -84,7 +84,7 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │   ├── seed-local.ts                # dữ liệu mẫu, từ chối chạy khi APP_ENV=production
 │   └── import-admin-units.ts        # nạp danh mục 34 tỉnh/thành + phường/xã
 ├── src/
-│   ├── middleware.ts
+│   ├── proxy.ts
 │   ├── app/
 │   │   ├── (shop)/
 │   │   │   ├── page.tsx                         # trang chủ
@@ -123,7 +123,7 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │       ├── db/ client.ts  schema/*.ts  tx.ts
 │       ├── auth/ port.ts  supabase.adapter.ts  session.ts  guards.ts
 │       ├── lib/ errors.ts  logger.ts  rate-limit.ts  tokens.ts  money.ts  clock.ts  vietqr.ts  safe-equal.ts
-│       ├── security/ headers.ts                 # hàm thuần dựng CSP + header bảo mật; middleware.ts gọi
+│       ├── security/ headers.ts                 # hàm thuần dựng CSP + header bảo mật; proxy.ts gọi
 │       ├── adapters/                            # "Switchboard"
 │       │   ├── payment/ index.ts  sepay.ts  fake.ts
 │       │   ├── sms/ index.ts  console.ts  esms.ts (hoặc nhà cung cấp được chọn)
@@ -177,7 +177,7 @@ Nhân viên và admin:
 - Nhân viên nghỉ việc: admin vô hiệu hóa → `staff_members.is_active = false` + thu hồi mọi phiên qua Admin API.
 - Tài khoản nhân viên không dùng để mua hàng.
 
-Cookie phiên: do `@supabase/ssr` quản lý, cấu hình `httpOnly`, `secure`, `sameSite=lax`, `path=/`. Middleware chỉ làm mới phiên, không quyết định quyền.
+Cookie phiên: do `@supabase/ssr` quản lý, cấu hình `httpOnly`, `secure`, `sameSite=lax`, `path=/`. Proxy chỉ làm mới phiên, không quyết định quyền.
 
 Thiết lập Supabase Auth cần bật: phone provider + Send SMS Hook, email provider (chỉ phục vụ đăng nhập nhân viên, tắt gửi email xác nhận vì tài khoản do admin tạo), độ dài mật khẩu tối thiểu 8, chặn mật khẩu đã bị lộ (nếu gói hỗ trợ), CAPTCHA Turnstile, MFA TOTP, rate limit OTP.
 
@@ -277,7 +277,7 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
 
 - Trang public (trang chủ, danh mục, sản phẩm) là Server Component, có `generateMetadata`, `sitemap.ts`, `robots.ts`, JSON-LD `Product`.
 - CSP dùng nonce nên MỌI trang render động: root layout gọi `await connection()` để Next.js gắn nonce lúc render theo request (trang tĩnh dựng lúc build không có nonce, script của chính Next.js sẽ bị chặn). Hệ quả: HTML có `Cache-Control: private, no-cache, no-store`, CDN không cache HTML, mỗi lượt xem tốn một lần render; file `/_next/static` vẫn cache vĩnh viễn. Bù bằng cache dữ liệu (`unstable_cache` hoặc tương đương, có tag để invalidate khi admin sửa sản phẩm) để giảm tải database.
-- Next.js 16 đổi tên convention `middleware` thành `proxy` (bản cũ deprecated, build có cảnh báo). Dự án giữ `src/middleware.ts`; chuyển sang `proxy.ts` là việc riêng (xem N26).
+- Next.js 16 đổi tên convention `middleware` thành `proxy` (bản cũ deprecated). Dự án dùng `src/proxy.ts`, export hàm `proxy`, chạy trên Node.js runtime (xem N26).
 - Ảnh qua `next/image`, `remotePatterns` chỉ cho phép domain Supabase Storage của dự án.
 - Tìm kiếm: Postgres full-text + `unaccent` + `pg_trgm` để gõ không dấu vẫn ra ("banh mi" → "Bánh mì").
 - Viewport cho phép phóng to (không đặt `maximumScale`, `userScalable`).

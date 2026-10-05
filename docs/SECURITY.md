@@ -48,7 +48,7 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
 - Xuất CSV: thoát công thức (ô bắt đầu bằng `=`, `+`, `-`, `@` thì thêm `'`).
 - Nhập Excel: parse ở server, giới hạn dòng và dung lượng, validate từng dòng, xem trước rồi mới ghi trong một transaction. Không dùng gói `xlsx` bản trên npm registry (bản cũ, có lỗ hổng đã biết); dùng `exceljs` hoặc bản SheetJS phát hành từ kênh chính thức của họ, có ghi rõ phiên bản.
 
-### HTTP headers (gắn bởi `src/middleware.ts`, dựng bởi hàm thuần `src/server/security/headers.ts`)
+### HTTP headers (gắn bởi `src/proxy.ts`, dựng bởi hàm thuần `src/server/security/headers.ts`)
 - `Content-Security-Policy` với nonce 128 bit mới cho từng request (Web Crypto, không dùng `Math.random`):
   `default-src 'self'; script-src 'self' 'nonce-{n}' 'strict-dynamic' [turnstile]; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: [supabase]; connect-src 'self' [sentry]; frame-src [turnstile hoặc 'none']; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; [upgrade-insecure-requests]`
   - Domain ngoài lấy từ biến môi trường, không viết cứng: `[supabase]` là origin của `SUPABASE_URL`; `[sentry]` là đúng host ingest trong `SENTRY_DSN`; `[turnstile]` là `https://challenges.cloudflare.com`, chỉ mở khi `CAPTCHA_PROVIDER=turnstile` và có `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. Biến thiếu hoặc không hợp lệ thì bỏ nguồn đó (`frame-src` thành `'none'`): CSP chỉ chặt hơn, không bao giờ lỏng hơn.
@@ -61,8 +61,8 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
 - `Referrer-Policy: strict-origin-when-cross-origin` (trang có token trên URL: `no-referrer`; các trang đó chưa có, làm cùng trang đơn hàng)
 - `Permissions-Policy: camera=(self), geolocation=(self), microphone=(), payment=()`
 - Tắt header `X-Powered-By` (`poweredByHeader: false`).
-- Phạm vi: middleware bỏ qua `/_next/static`, `/_next/image`, `favicon.ico` và request prefetch (theo hướng dẫn CSP của Next.js), nên các file tĩnh đó không có header ở trên. Tài liệu HTML, trang 404 và route API đều có.
-- Test: `src/server/security/headers.test.ts` (hàm thuần), `src/middleware.test.ts` (nối env), `pnpm test:http` (server build thật).
+- Phạm vi: proxy bỏ qua `/_next/static`, `/_next/image`, `favicon.ico` và request prefetch (theo hướng dẫn CSP của Next.js), nên các file tĩnh đó không có header ở trên. Tài liệu HTML, trang 404 và route API đều có.
+- Test: `src/server/security/headers.test.ts` (hàm thuần), `src/proxy.test.ts` (nối env), `pnpm test:http` (server build thật).
 
 ### Secret
 - Lưu trong Vercel Environment Variables, tách biệt Preview/Production. Không bao giờ commit `.env*` (chỉ commit `.env.example` không có giá trị).

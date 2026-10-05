@@ -46,7 +46,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 1. Trình duyệt không bao giờ quyết định giá, tổng tiền, giảm giá, số điểm, tồn kho, trạng thái đơn hay quyền hạn.
    Server luôn tự tính lại từ database, bỏ qua mọi con số client gửi lên (trừ `expectedTotal` dùng để phát hiện giá thay đổi).
 2. Mọi Server Action và Route Handler tự làm đủ 3 bước: xác thực phiên, kiểm tra quyền, kiểm tra input bằng Zod.
-   `middleware.ts` KHÔNG phải ranh giới bảo mật, chỉ dùng cho CSP nonce, làm mới cookie phiên và điều hướng giao diện.
+   `proxy.ts` (tên mới của `middleware.ts` từ Next.js 16) KHÔNG phải ranh giới bảo mật, chỉ dùng cho CSP nonce, làm mới cookie phiên và điều hướng giao diện.
 3. Chỉ luồng thanh toán đã xác thực (webhook SePay có chữ ký hợp lệ, hoặc job đối soát gọi API SePay) được chuyển đơn sang PAID.
    Ngoại lệ duy nhất: admin xử lý giao dịch ngoại lệ, yêu cầu MFA step-up và ghi audit log. Không tạo nút, route hay hàm "giả lập thanh toán" nào trong code chạy production.
 4. Tiền là số nguyên VND. Không dùng số thực cho tiền. Tỷ lệ phần trăm lưu dạng basis points (100 = 1%).

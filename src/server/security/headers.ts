@@ -2,7 +2,7 @@ import "server-only";
 import { isProductionLike, type AppEnv } from "@/server/env";
 
 // Toàn bộ file này là hàm thuần: không đọc process.env, không dùng Next.js. Cấu hình đi vào qua
-// tham số để unit test được từng kịch bản. `src/middleware.ts` là nơi duy nhất đọc `env`.
+// tham số để unit test được từng kịch bản. `src/proxy.ts` là nơi duy nhất đọc `env`.
 // Chạy được cả trên Edge runtime nên chỉ dùng API chuẩn của web (Web Crypto, URL, btoa).
 // Nguồn quy tắc: docs/SECURITY.md mục 2 ("HTTP headers").
 
