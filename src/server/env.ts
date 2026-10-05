@@ -2,9 +2,14 @@ import "server-only";
 import { z } from "zod";
 
 const APP_ENVS = ["local", "test", "staging", "production"] as const;
-type AppEnv = (typeof APP_ENVS)[number];
+export type AppEnv = (typeof APP_ENVS)[number];
 
 const PRODUCTION_LIKE_ENVS: readonly AppEnv[] = ["staging", "production"];
+
+// Một nơi duy nhất định nghĩa "môi trường giống production" để env.ts, HSTS và CSP không lệch nhau.
+export function isProductionLike(appEnv: AppEnv): boolean {
+  return PRODUCTION_LIKE_ENVS.includes(appEnv);
+}
 
 const rawEnvSchema = z.object({
   APP_ENV: z.enum(APP_ENVS),
@@ -72,7 +77,7 @@ const MOCK_PROVIDER_VALUES: readonly [keyof RawEnv, string][] = [
 ];
 
 const envSchema = rawEnvSchema.superRefine((value, ctx) => {
-  if (!PRODUCTION_LIKE_ENVS.includes(value.APP_ENV)) {
+  if (!isProductionLike(value.APP_ENV)) {
     return;
   }
 
@@ -99,8 +104,18 @@ const envSchema = rawEnvSchema.superRefine((value, ctx) => {
 
 export type Env = RawEnv;
 
+// File .env sao chép từ .env.example thường để trống biến chưa dùng (`SEPAY_API_TOKEN=`). Coi chuỗi
+// rỗng như chưa đặt: biến tùy chọn thành undefined, biến bắt buộc vẫn báo thiếu, và ở
+// staging/production các biến trong REQUIRED_ONLY_IN_PRODUCTION_LIKE vẫn bị từ chối (kiểm tra
+// bằng `!value[key]`). Nhờ vậy local không sập vì giá trị trống mà production không dễ dãi hơn.
+function treatEmptyAsUnset(
+  raw: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, value || undefined]));
+}
+
 export function parseEnv(raw: Record<string, string | undefined>): Env {
-  const result = envSchema.safeParse(raw);
+  const result = envSchema.safeParse(treatEmptyAsUnset(raw));
   if (!result.success) {
     const details = result.error.issues
       .map((issue) => `- ${issue.path.join(".") || "(gốc)"}: ${issue.message}`)
