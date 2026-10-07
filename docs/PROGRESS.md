@@ -10,7 +10,7 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.2 | Cấu hình môi trường an toàn  | Đã merge   | #2  | `src/server/env.ts`                                          |
 | T0.3 | Database và migration nền    | Đã merge   | #3  | Xem "Quyết định đã chốt"                                     |
 | T0.4 | Thư viện lõi phía server     | Đã merge   | #7  | `src/server/lib/*`, migration `0001_rate_limits`; xem "Quyết định đã chốt (T0.4)" |
-| T0.5 | Middleware và headers bảo mật | Chờ merge  | #8  | `src/middleware.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
+| T0.5 | Proxy (middleware) và headers bảo mật | Đã merge   | #8  | `src/proxy.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
 | T0.6 | Audit log                    | Chưa làm   |     |                                                              |
 | T0.7 | CI                           | Chưa làm   |     | Cần chốt cách đặt mật khẩu `app_runtime` cho CI              |
 | T0.8 | Bộ component giao diện       | Chưa làm   |     |                                                              |
@@ -22,6 +22,7 @@ Ngoài roadmap:
 | ---------------------------- | ---------- | --- | --------------------------------------------------- |
 | README bảo mật máy dev       | Đã merge   | #4  | Mục "Bảo mật máy phát triển" trong README           |
 | Sửa lỗi xuống dòng (LF)      | Đã merge   | #5  | `.gitattributes`, `.editorconfig`, Prettier `endOfLine: "lf"`; `pnpm format:check` xanh trên Windows |
+| T0.5b: proxy và agent rules  | Chờ merge  | #9    | `src/proxy.ts`, `agentRules: false`; xem "Quyết định đã chốt (T0.5b)" |
 
 ## Quyết định đã chốt (T0.3)
 
@@ -39,22 +40,25 @@ Ngoài roadmap:
 
 ## Quyết định đã chốt (T0.5)
 
-- Header bảo mật dựng bằng hàm thuần `src/server/security/headers.ts`; `src/middleware.ts` chỉ nối `env` vào và gắn header lên cả request (để Next.js lấy nonce) lẫn response. Chi tiết CSP ở N23.
+- Header bảo mật dựng bằng hàm thuần `src/server/security/headers.ts`; `src/proxy.ts` (trước đây `middleware.ts`) chỉ nối `env` vào và gắn header lên cả request (để Next.js lấy nonce) lẫn response. Chi tiết CSP ở N23.
 - Mọi trang render động (root layout `await connection()`) vì nonce; HTML không còn được CDN cache (N24).
-- `env.ts` coi chuỗi rỗng là chưa đặt (N25): sửa lỗi tiềm ẩn từ T0.2 làm middleware trả 500 với `.env.local` có biến để trống.
-- Giữ tên `middleware.ts` dù Next.js 16 đã deprecate (N26).
-- Test: `src/server/security/headers.test.ts`, `src/middleware.test.ts` (trong `pnpm check`) và `pnpm test:http` (khởi động `next start` thật cho local/staging/production; cần `pnpm build` trước nên nằm ngoài `pnpm check`).
-- Làm mới phiên Supabase chuyển sang T1.1 (chỗ để sẵn `TODO(T1.1)` trong `src/middleware.ts`).
+- `env.ts` coi chuỗi rỗng là chưa đặt (N25): sửa lỗi tiềm ẩn từ T0.2 làm proxy trả 500 với `.env.local` có biến để trống.
+- Giữ tên `middleware.ts` dù Next.js 16 đã deprecate (N26); đã đổi sang `proxy.ts` ở T0.5b.
+- Test: `src/server/security/headers.test.ts`, `src/proxy.test.ts` (trong `pnpm check`) và `pnpm test:http` (khởi động `next start` thật cho local/staging/production; cần `pnpm build` trước nên nằm ngoài `pnpm check`).
+- Làm mới phiên Supabase chuyển sang T1.1 (chỗ để sẵn `TODO(T1.1)` trong `src/proxy.ts`).
+
+## Quyết định đã chốt (T0.5b)
+
+- `src/middleware.ts` → `src/proxy.ts`, hàm `middleware` → `proxy`, test đổi theo (N26). `pnpm build` không còn cảnh báo deprecated.
+- `agentRules: false` trong `next.config.ts` để `next dev` không ghi vào `CLAUDE.md` (N27).
 
 ## Việc treo
 
 - T0.7 (CI): chạy `pnpm build` rồi `pnpm test:http` sau bước build.
-- Đổi `src/middleware.ts` thành `src/proxy.ts` (N26), trước khi nâng Next.js lên bản chính kế tiếp.
 - `Referrer-Policy: no-referrer` cho trang có token trên URL: làm cùng trang đơn hàng.
 - Thêm Supabase vào `connect-src` khi làm upload ảnh bằng signed URL; thêm domain tile OSM vào `img-src` ở T1.4.
 - Test header trên trang admin: thêm khi có `/admin/dang-nhap` (T1.5).
-- `/_next/static` và `favicon.ico` không đi qua middleware nên không có `X-Content-Type-Options`; nếu cần phủ cả file tĩnh thì thêm `headers()` trong `next.config.ts`.
-- `next dev` (Next.js 16.3) tự chèn một khối "agent rules" vào cuối `CLAUDE.md` mỗi lần chạy `pnpm dev`; muốn tắt thì đặt `agentRules: false` trong `next.config.ts`.
+- `/_next/static` và `favicon.ico` không đi qua proxy nên không có `X-Content-Type-Options`; nếu cần phủ cả file tĩnh thì thêm `headers()` trong `next.config.ts`.
 
 - Cron `cleanup` xóa dòng cũ của `rate_limits` chưa có (làm cùng các job cron ở giai đoạn sau); bảng tăng dần cho tới lúc đó.
 - Câu hỏi mở Q15: cửa sổ "theo ngày" của giới hạn OTP đếm lại lúc 0h giờ Việt Nam hay 7h (UTC).

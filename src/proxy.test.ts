@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractNonce, parseCsp } from "../tests/helpers/csp";
 
-// Biến môi trường hợp lệ cho `env.ts`; middleware đọc cấu hình qua `env` chứ không đọc rải rác.
+// Biến môi trường hợp lệ cho `env.ts`; proxy đọc cấu hình qua `env` chứ không đọc rải rác.
 const BASE_ENV: Record<string, string> = {
   APP_ENV: "local",
   APP_URL: "http://localhost:3000",
@@ -31,13 +31,13 @@ const BASE_ENV: Record<string, string> = {
 };
 
 // `env.ts` giữ kết quả parse trong module nên mỗi kịch bản phải nạp lại module từ đầu.
-async function loadMiddleware(overrides: Record<string, string> = {}) {
+async function loadProxy(overrides: Record<string, string> = {}) {
   vi.resetModules();
   for (const [key, value] of Object.entries({ ...BASE_ENV, ...overrides })) {
     vi.stubEnv(key, value);
   }
-  const { middleware } = await import("@/middleware");
-  return middleware;
+  const { proxy } = await import("@/proxy");
+  return proxy;
 }
 
 function request(path = "/") {
@@ -49,10 +49,10 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("middleware", () => {
+describe("proxy", () => {
   it("đặt đủ header bảo mật, lấy cấu hình từ env", async () => {
-    const middleware = await loadMiddleware();
-    const response = middleware(request());
+    const proxy = await loadProxy();
+    const response = proxy(request());
 
     const csp = response.headers.get("Content-Security-Policy") ?? "";
     expect(extractNonce(csp)).toBeTruthy();
@@ -64,10 +64,10 @@ describe("middleware", () => {
   });
 
   it("mỗi request có nonce khác nhau", async () => {
-    const middleware = await loadMiddleware();
+    const proxy = await loadProxy();
     const nonces = new Set<string | undefined>();
     for (let i = 0; i < 50; i += 1) {
-      const response = middleware(request());
+      const response = proxy(request());
       nonces.add(extractNonce(response.headers.get("Content-Security-Policy") ?? ""));
     }
     expect(nonces.size).toBe(50);
@@ -76,12 +76,12 @@ describe("middleware", () => {
 
   it("chỉ gửi HSTS ở staging và production", async () => {
     const hsts = async (appEnv: string) => {
-      const middleware = await loadMiddleware(
+      const proxy = await loadProxy(
         appEnv === "staging" || appEnv === "production"
           ? { APP_ENV: appEnv, APP_URL: "https://shop.example.test" }
           : { APP_ENV: appEnv },
       );
-      return middleware(request()).headers.get("Strict-Transport-Security");
+      return proxy(request()).headers.get("Strict-Transport-Security");
     };
 
     expect(await hsts("local")).toBeNull();
@@ -91,13 +91,13 @@ describe("middleware", () => {
   });
 
   it("NODE_ENV=development ở local thì nới 'unsafe-eval', ở production thì không", async () => {
-    const dev = (await loadMiddleware({ NODE_ENV: "development" }))(request());
+    const dev = (await loadProxy({ NODE_ENV: "development" }))(request());
     expect(parseCsp(dev.headers.get("Content-Security-Policy") ?? "").get("script-src")).toContain(
       "'unsafe-eval'",
     );
 
     const prod = (
-      await loadMiddleware({
+      await loadProxy({
         APP_ENV: "production",
         APP_URL: "https://shop.example.test",
         NODE_ENV: "development",
@@ -107,7 +107,7 @@ describe("middleware", () => {
   });
 
   it("cấu hình môi trường sai thì ném lỗi, không trả phản hồi thiếu header", async () => {
-    const middleware = await loadMiddleware({ APP_ENV: "khong-hop-le" });
-    expect(() => middleware(request())).toThrow();
+    const proxy = await loadProxy({ APP_ENV: "khong-hop-le" });
+    expect(() => proxy(request())).toThrow();
   });
 });

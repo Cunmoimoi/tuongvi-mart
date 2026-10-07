@@ -6,9 +6,8 @@ import { buildSecurityHeaders, generateNonce } from "@/server/security/headers";
 // cho từng request, HSTS...) và sau này làm mới cookie phiên. Mọi kiểm tra quyền nằm trong
 // Server Action và Route Handler.
 //
-// Next.js 16 đã đổi tên convention này thành `proxy` (middleware bị đánh dấu deprecated, chức năng
-// giữ nguyên). Giữ tên `middleware.ts` theo ARCHITECTURE.md; đổi sang `proxy.ts` là việc riêng.
-export function middleware(request: NextRequest) {
+// Next.js 16 đổi tên convention `middleware` thành `proxy` (chạy trên Node.js runtime).
+export function proxy(request: NextRequest) {
   // `env` ném lỗi nếu cấu hình sai: request thất bại thay vì trả trang không có header bảo mật.
   const securityHeaders = buildSecurityHeaders({
     nonce: generateNonce(),

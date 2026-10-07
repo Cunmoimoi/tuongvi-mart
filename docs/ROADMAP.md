@@ -56,9 +56,9 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 - `errors.ts` (AppError + bảng thông điệp tiếng Việt), `logger.ts` (JSON, requestId, che SĐT, lọc khóa nhạy cảm), `clock.ts`, `tokens.ts` (`randomToken(bytes)`, `generateOrderCode()`), `safe-equal.ts`, `money.ts`, `rate-limit.ts` (Postgres).
 - Nghiệm thu: test `generateOrderCode` đúng định dạng và chỉ dùng bảng chữ cho phép; test logger che `0901234567` → `090****567` và bỏ trường `password`; test rate limit đúng ngưỡng khi gọi song song.
 
-### T0.5 Middleware và headers bảo mật
-- Sinh nonce CSP mỗi request, set các header trong SECURITY mục 2. Hàm dựng header là hàm thuần trong `src/server/security/headers.ts`; `src/middleware.ts` chỉ nối cấu hình từ `env` vào. Mọi trang render động vì nonce (ARCHITECTURE mục 11).
-- Làm mới phiên Supabase: chuyển sang T1.1 (cần `@supabase/ssr` và `auth/supabase.adapter.ts`, chưa có ở giai đoạn này). `src/middleware.ts` để sẵn chú thích `TODO(T1.1)`.
+### T0.5 Proxy (trước đây middleware) và headers bảo mật
+- Sinh nonce CSP mỗi request, set các header trong SECURITY mục 2. Hàm dựng header là hàm thuần trong `src/server/security/headers.ts`; `src/proxy.ts` chỉ nối cấu hình từ `env` vào. Mọi trang render động vì nonce (ARCHITECTURE mục 11).
+- Làm mới phiên Supabase: chuyển sang T1.1 (cần `@supabase/ssr` và `auth/supabase.adapter.ts`, chưa có ở giai đoạn này). `src/proxy.ts` để sẵn chú thích `TODO(T1.1)`.
 - Nghiệm thu: unit test hàm dựng header; test HTTP (`pnpm test:http`, gọi vào server `next start` thật, không dùng Playwright) kiểm tra header xuất hiện trên trang chủ và trang 404, HSTS chỉ có ở staging/production, nonce khác nhau mỗi request và khớp với mọi thẻ `<script>`. Chưa có trang admin nên chưa kiểm ở đó; thêm khi có `/admin/dang-nhap` (T1.5).
 
 ### T0.6 Audit log
@@ -89,7 +89,7 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 
 ### T1.1 Auth port, phiên, guard
 - `auth/port.ts`, `auth/supabase.adapter.ts` (server client qua `@supabase/ssr`), `session.ts`, `guards.ts`: `requireCustomer`, `requireStaff`, `requireAdmin({ mfa })`, `requireStepUp()`, `requireOrderAccess`.
-- Làm mới cookie phiên Supabase trong `src/middleware.ts` (chuyển từ T0.5, chỗ để sẵn `TODO(T1.1)`); middleware chỉ làm mới cookie, không quyết định quyền.
+- Làm mới cookie phiên Supabase trong `src/proxy.ts` (chuyển từ T0.5, chỗ để sẵn `TODO(T1.1)`); proxy chỉ làm mới cookie, không quyết định quyền.
 - Test quét tĩnh: mọi `actions.ts`/`route.ts` gọi guard hoặc có chú thích `public-endpoint`.
 - Nghiệm thu: ma trận test vai trò × guard; sửa cookie thủ công không nâng được quyền; nhân viên bị vô hiệu hóa bị chặn ngay ở request tiếp theo.
 
