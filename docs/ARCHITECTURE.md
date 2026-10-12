@@ -126,6 +126,8 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │       ├── auth/ port.ts  supabase.adapter.ts  session.ts  guards.ts
 │       ├── lib/ errors.ts  logger.ts  rate-limit.ts  tokens.ts  money.ts  clock.ts  vietqr.ts  safe-equal.ts
 │       ├── security/ headers.ts                 # hàm thuần dựng CSP + header bảo mật; proxy.ts gọi
+│       ├── audit/ service.ts  actions.ts  payload.ts  request-context.ts  repo.ts
+│       │                                        # record() dùng chung cho mọi module, xem mục 12
 │       ├── adapters/                            # "Switchboard"
 │       │   ├── payment/ index.ts  sepay.ts  fake.ts
 │       │   ├── sms/ index.ts  console.ts  esms.ts (hoặc nhà cung cấp được chọn)
@@ -136,7 +138,7 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │           ├── catalog/  pricing/  inventory/  fulfillment/
 │           ├── checkout/  orders/  payments/  handover/  refunds/
 │           ├── loyalty/  customers/  staff/  settings/
-│           ├── reports/  analytics/  audit/  notifications/  media/
+│           ├── reports/  analytics/  notifications/  media/
 │           │   (fulfillment/ gồm strategy.ts và shipping/: port.ts  free.policy.ts  index.ts, xem mục 14;
 │           │    media/ gồm service xử lý ảnh, xem mục 15)
 │           └── (mỗi module: service.ts, repo.ts, schemas.ts, *.test.ts)
@@ -290,6 +292,7 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
 ## 12. Quan sát và vận hành
 
 - Logger JSON có `requestId`, tự che SĐT, bỏ các trường nhạy cảm (`password`, `token`, `otp`, `secret`, `authorization`).
+- Audit: `server/audit/service.ts` có `record({ actor, action, entity, before, after, request }, { tx })`. Nằm ngoài `modules/` vì mọi module đều gọi (giống `lib/`). Truyền `tx` của thao tác nghiệp vụ để dòng audit cùng commit, cùng rollback; ghi audit lỗi thì thao tác nghiệp vụ cũng lỗi (đóng cửa khi lỗi). Không có `tx` (chỉ cho sự kiện không kèm thay đổi dữ liệu, ví dụ `auth.login_failed`) thì ghi bằng `getDb()`. Tên action phải có trong `server/audit/actions.ts`. `before`/`after` được làm sạch bằng chính `sanitizeForLog` của logger rồi cắt nếu quá 16 KB. Ngữ cảnh request lấy bằng `getRequestContext(await headers())`; truyền cùng `requestId` vào `createLogger` để nối log với audit. Header IP chỉ đáng tin khi chạy sau proxy của Vercel (SECURITY mục 2, "Log và dữ liệu cá nhân").
 - Sentry: `sendDefaultPii: false`, lọc header `cookie`/`authorization`.
 - Cảnh báo cho chủ shop khi: có ngoại lệ thanh toán, chữ ký webhook sai quá 5 lần trong 10 phút, job cron lỗi, đơn PAID quá 30 phút chưa có người nhận đóng gói (trong giờ mở cửa).
 - Backup: backup hằng ngày của Supabase Pro, cộng bản `pg_dump` hằng tuần (GitHub Action) mã hóa, lưu ở nơi khác. Mỗi tháng thử khôi phục vào project staging.
