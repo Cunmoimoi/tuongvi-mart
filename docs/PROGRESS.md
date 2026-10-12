@@ -23,7 +23,7 @@ Ngoài roadmap:
 | README bảo mật máy dev       | Đã merge   | #4  | Mục "Bảo mật máy phát triển" trong README           |
 | Sửa lỗi xuống dòng (LF)      | Đã merge   | #5  | `.gitattributes`, `.editorconfig`, Prettier `endOfLine: "lf"`; `pnpm format:check` xanh trên Windows |
 | T0.5b: proxy và agent rules  | Đã merge   | #9    | `src/proxy.ts`, `agentRules: false`; xem "Quyết định đã chốt (T0.5b)" |
-| Docs: yêu cầu bổ sung (phí giao, trả trước, ảnh) | Chờ merge | PRNUM | Chỉ sửa tài liệu; xem "Quyết định đã chốt (yêu cầu bổ sung, 12/10/2026)" |
+| Docs: yêu cầu bổ sung (phí giao, trả trước, ảnh) | Chờ merge | #10   | Chỉ sửa tài liệu; xem "Quyết định đã chốt (yêu cầu bổ sung, 12/10/2026)" |
 
 ## Quyết định đã chốt (T0.3)
 
