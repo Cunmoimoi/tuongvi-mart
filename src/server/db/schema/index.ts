@@ -7,3 +7,4 @@ import "server-only";
  */
 export { APP_SCHEMA, appSchema } from "./app-schema";
 export { rateLimits } from "./rate-limits";
+export { AUDIT_ACTOR_TYPES, auditLogs, type AuditActorType, type NewAuditLog } from "./audit-logs";

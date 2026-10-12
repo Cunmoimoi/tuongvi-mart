@@ -1,0 +1,254 @@
+{
+  "id": "a412db02-dee4-46a7-91f5-9dcf005fc7fa",
+  "prevId": "5fc9a17a-2e43-4a88-89fb-10cf6e34f621",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "app.audit_logs": {
+      "name": "audit_logs",
+      "schema": "app",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "before": {
+          "name": "before",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "after": {
+          "name": "after",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip": {
+          "name": "ip",
+          "type": "inet",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "audit_logs_entity_idx": {
+          "name": "audit_logs_entity_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_logs_actor_id_created_at_idx": {
+          "name": "audit_logs_actor_id_created_at_idx",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_logs_action_created_at_idx": {
+          "name": "audit_logs_action_created_at_idx",
+          "columns": [
+            {
+              "expression": "action",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "audit_logs_actor_type_valid": {
+          "name": "audit_logs_actor_type_valid",
+          "value": "\"app\".\"audit_logs\".\"actor_type\" in ('SYSTEM', 'CUSTOMER', 'STAFF', 'ADMIN', 'PAYMENT')"
+        },
+        "audit_logs_action_format": {
+          "name": "audit_logs_action_format",
+          "value": "char_length(\"app\".\"audit_logs\".\"action\") <= 100 and \"app\".\"audit_logs\".\"action\" ~ '^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$'"
+        },
+        "audit_logs_entity_type_format": {
+          "name": "audit_logs_entity_type_format",
+          "value": "\"app\".\"audit_logs\".\"entity_type\" ~ '^[a-z][a-z0-9_]{0,63}$'"
+        },
+        "audit_logs_entity_id_length": {
+          "name": "audit_logs_entity_id_length",
+          "value": "char_length(\"app\".\"audit_logs\".\"entity_id\") between 1 and 128"
+        },
+        "audit_logs_entity_id_requires_type": {
+          "name": "audit_logs_entity_id_requires_type",
+          "value": "\"app\".\"audit_logs\".\"entity_id\" is null or \"app\".\"audit_logs\".\"entity_type\" is not null"
+        },
+        "audit_logs_user_agent_length": {
+          "name": "audit_logs_user_agent_length",
+          "value": "char_length(\"app\".\"audit_logs\".\"user_agent\") <= 255"
+        },
+        "audit_logs_request_id_length": {
+          "name": "audit_logs_request_id_length",
+          "value": "char_length(\"app\".\"audit_logs\".\"request_id\") between 1 and 128"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "app.rate_limits": {
+      "name": "rate_limits",
+      "schema": "app",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "window_start": {
+          "name": "window_start",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "rate_limits_key_window_start_pk": {
+          "name": "rate_limits_key_window_start_pk",
+          "columns": ["key", "window_start"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "rate_limits_count_positive": {
+          "name": "rate_limits_count_positive",
+          "value": "\"app\".\"rate_limits\".\"count\" > 0"
+        },
+        "rate_limits_key_length": {
+          "name": "rate_limits_key_length",
+          "value": "char_length(\"app\".\"rate_limits\".\"key\") between 1 and 256"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "app": "app"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
