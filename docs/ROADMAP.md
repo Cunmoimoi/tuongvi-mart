@@ -66,16 +66,17 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 - Nghiệm thu: test ghi được; test `app_runtime` không UPDATE/DELETE được `audit_logs`.
 
 ### T0.7 CI
-- GitHub Actions: install → typecheck → lint → unit → khởi Postgres + migrate → integration → `pnpm audit --audit-level high` → gitleaks → build.
+- GitHub Actions: install → typecheck → lint → unit → khởi Postgres + migrate → integration → `pnpm audit --audit-level high` → gitleaks → build → `pnpm test:http` (BẮT BUỘC chạy sau bước build, vì test khởi động `next start` thật).
 - Câu hỏi mở: cách đặt mật khẩu role `app_runtime` cho CI (đề xuất: workflow tự đặt mật khẩu tạm, giữ nguyên guard nghiêm).
-- Nghiệm thu: PR mẫu chạy xanh; commit thử một chuỗi giống secret làm CI đỏ.
+- Nghiệm thu: PR mẫu chạy xanh; commit thử một chuỗi giống secret làm CI đỏ; bỏ bước build thì `pnpm test:http` đỏ (không được bỏ qua âm thầm).
 
 ### T0.8 Bộ component giao diện
 - Theo `docs/UI_SPEC.md` mục 2 (design tokens, font Be Vietnam Pro qua `next/font`) và mục 5 (component dùng chung).
 - `components/ui`: Button, Input, Select, Textarea, Checkbox, Modal, Drawer, BottomSheet, ResponsiveDialog, Badge, Chip, Card, Tabs, Accordion, SegmentedControl, Toast, Skeleton, EmptyState, Pagination, ConfirmDialog.
 - Khung storefront theo UI_SPEC mục 1 và 3: header desktop 70px, thanh hình thức mua, sidebar danh mục 256px + mega menu, thanh thông báo, nút chat nổi, footer, header và bottom nav mobile, trang danh mục mobile; khung admin (Sidebar). Dữ liệu tạm bằng props mẫu.
+- Ảnh: `lib/images/presets.ts` (preset và `sizes` sinh từ bảng số cột lưới ở UI_SPEC mục 4.4), `lib/images/loader.ts` (custom loader cho `next/image`, trả bản đã tạo sẵn gần nhất), component `AppImage` nhận `preset` (ARCHITECTURE mục 15, UI_SPEC mục 6). `AppImage` luôn có `width`/`height`, hỗ trợ `blur_data_url` và `priority`. ESLint cấm `<img>` trần cho ảnh nội dung (`@next/next/no-img-element` ở mức lỗi). Chưa có pipeline phía server (làm ở T2.2): ở giai đoạn này dùng ảnh giữ chỗ.
 - Tham khảo UI: xem bảng tái sử dụng.
-- Nghiệm thu: trang `/dev/ui` (chỉ render khi `APP_ENV=local`) hiển thị các component ở mọi trạng thái; không có lỗi a11y cơ bản (label cho input, focus nhìn thấy được); khung trang đúng bố cục ở 390px và 1280px; ảnh chụp ở 1536px khớp ảnh tham chiếu 01 và 04 về vị trí và kích thước (sai lệch ≤ 10%).
+- Nghiệm thu: trang `/dev/ui` (chỉ render khi `APP_ENV=local`) hiển thị các component ở mọi trạng thái; không có lỗi a11y cơ bản (label cho input, focus nhìn thấy được); khung trang đúng bố cục ở 390px và 1280px; ảnh chụp ở 1536px khớp ảnh tham chiếu 01 và 04 về vị trí và kích thước (sai lệch ≤ 10%). Unit test `AppImage`: đúng `sizes` cho từng preset, loader chọn đúng chiều rộng, luôn có `width`/`height`; test ESLint: file chứa `<img>` trần bị báo lỗi.
 
 ### T0.9 Khung adapter (Switchboard)
 - Tạo các port và adapter theo ARCHITECTURE mục 9; adapter thật chưa làm xong phải `throw NotImplementedError`.
@@ -134,9 +135,20 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 
 ### T2.2 Sản phẩm, quy cách, ảnh
 - Schema `products` (gồm các trường thông tin chi tiết: hạn sử dụng, thành phần, hướng dẫn sử dụng, bảo quản), `sell_units`, `product_images`; admin tạo/sửa/ẩn/xóa mềm.
-- Upload ảnh: server cấp signed upload URL (admin), bucket giới hạn JPEG/PNG/WebP ≤ 5 MB; tối đa 8 ảnh, chọn ảnh chính.
+- Ảnh: admin chỉ tải ảnh gốc (JPEG, PNG, WebP; ≤ 12 MB; ≤ 40 megapixel), không có bước nén thủ công; tối đa 8 ảnh, chọn ảnh chính. Làm đúng ARCHITECTURE mục 15:
+  - Server cấp signed upload URL (chỉ staff/admin, rate limit) vào bucket riêng tư `incoming`; trình duyệt tải thẳng lên (request qua hàm serverless bị giới hạn dung lượng). Thêm Supabase vào CSP `connect-src` và cập nhật test header.
+  - Route xử lý (chỉ staff/admin, rate limit): tải ảnh về, xác định loại bằng nội dung thật, từ chối SVG, ảnh động và ảnh quá lớn; `sharp` với `limitInputPixels`, tự xoay theo EXIF rồi xóa toàn bộ metadata; lưu bản chuẩn hóa (≤ 2400px) ở bucket riêng tư `normalized`; tạo các bản WebP theo preset (`product-thumb` 160; `product-card` 320, 480; `product-detail` 800, 1200; vuông, nền trắng, `contain`) chất lượng khoảng 80 vào bucket công khai; tạo `blur_data_url`; ghi `width`, `height`, `bytes`, `variants`, `blur_data_url`; xóa file trong `incoming`.
+  - Tự giảm chất lượng theo bậc khi vượt ngân sách dung lượng. Cron `cleanup` xóa file mồ côi trong `incoming` quá 24 giờ.
+  - Script `pnpm images:reprocess` tạo lại mọi bản từ ảnh chuẩn hóa khi đổi preset.
+  - `sharp` là dependency mới: PHẢI xin duyệt theo CLAUDE.md trước khi cài (tên, lý do, mức bảo trì, phương án thay thế), rồi mới làm.
 - Tham khảo UI: `admin/products/new`, `admin/products/[id]/edit`, `ProductImageUploader.tsx`.
-- Nghiệm thu: không tạo được quy cách `base_qty < 1` hay giá âm; upload SVG bị từ chối; sửa sản phẩm làm mới cache trang sản phẩm.
+- Nghiệm thu: không tạo được quy cách `base_qty < 1` hay giá âm; sửa sản phẩm làm mới cache trang sản phẩm. Test với ảnh mẫu (tự tạo, không lấy từ web):
+  - SVG, SVG đổi đuôi `.jpg`, ảnh động, file không phải ảnh có `Content-Type` ảnh → từ chối; ảnh > 12 MB hoặc > 40 megapixel → từ chối (không giải nén toàn bộ).
+  - Ảnh có EXIF xoay → bản ra đúng chiều; mọi bản ra không còn EXIF/GPS.
+  - Ảnh ngang 3:1 → `product-detail` vuông nền trắng, sản phẩm không bị cắt.
+  - Ngân sách: `product-card` 320px ≤ 40 KB, `product-detail` 800px ≤ 120 KB (vượt thì tự giảm chất lượng, test kiểm kết quả cuối).
+  - Khách, hội viên gọi route xử lý → 403; vượt rate limit → bị chặn; xử lý xong `incoming` sạch; lỗi giữa chừng không để bản ghi trỏ vào file thiếu.
+  - `pnpm images:reprocess` đổi một preset thì `variants` và file trong bucket cập nhật đúng.
 
 ### T2.3 Combo
 - Schema `combo_components`; UI chọn thành phần và số lượng.
@@ -153,8 +165,9 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 ### T2.6 Nhập/xuất Excel
 - Wizard 3 bước (tải file → xem trước + lỗi từng dòng → ghi trong 1 transaction). Dùng `exceljs` (cần duyệt dependency).
 - Xuất CSV sản phẩm/tồn kho có thoát công thức.
+- Cột ảnh (nếu có) chỉ nhận tên file nằm trong gói ảnh admin tải lên cùng lần nhập; tên có `http`, `//`, `..` hoặc dấu `/` đầu bị từ chối ở dòng đó. KHÔNG tải ảnh từ URL ngoài (tránh SSRF). Mọi ảnh đi qua cùng pipeline và giới hạn ở T2.2. Nếu gói ảnh là file ZIP thì thư viện giải nén cũng phải xin duyệt và chống ZIP bomb.
 - Tham khảo UI: `admin/products/import/page.tsx`.
-- Nghiệm thu: file có 1 dòng lỗi → không ghi dòng nào (hoặc chỉ ghi dòng hợp lệ nếu admin chọn), báo đúng dòng lỗi; file > 2.000 dòng bị từ chối.
+- Nghiệm thu: file có 1 dòng lỗi → không ghi dòng nào (hoặc chỉ ghi dòng hợp lệ nếu admin chọn), báo đúng dòng lỗi; file > 2.000 dòng bị từ chối; cột ảnh chứa URL hoặc tên không có trong gói ảnh → báo lỗi dòng đó và không có request mạng nào được gửi ra ngoài (test bằng mock chặn mạng).
 
 ### T2.7 Module giá và tồn khả dụng
 - Hàm thuần `priceCart`, `availableForSellUnit`, `availableForCombo`.
@@ -165,13 +178,14 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 - SEO: `generateMetadata`, `sitemap.ts`, `robots.ts`, JSON-LD Product; mô tả meta đúng ngành hàng thật của cửa hàng.
 - Cache dữ liệu có tag, làm mới khi admin sửa.
 - Tham khảo UI: `app/page.tsx`, `ProductCard`, `FlashSaleSection`, `ComboSection`, `HeroBanner`, `CategoryBar`, `QuickViewModal`, `products/[slug]`.
-- Nghiệm thu: trang sản phẩm có nội dung trong HTML trả về (xem nguồn trang); sản phẩm ẩn trả 404; đạt UI_SPEC mục 9 cho các trang này, gồm so sánh với ảnh tham chiếu 01–11.
+- Ảnh luôn qua `AppImage` với preset phù hợp; banner đầu trang chủ `priority`, các ảnh khác lazy.
+- Nghiệm thu: trang sản phẩm có nội dung trong HTML trả về (xem nguồn trang); mọi ảnh nội dung có `width`/`height` và đúng `sizes` của preset; sản phẩm ẩn trả 404; đạt UI_SPEC mục 9 cho các trang này, gồm so sánh với ảnh tham chiếu 01–11.
 
 ### T2.9 Banner và bộ sưu tập
-- Schema `banners`, `collections`, `collection_products` (DATA_MODEL mục 10); màn admin quản lý (upload ảnh desktop/mobile riêng, hẹn giờ bật/tắt, sắp xếp, chọn sản phẩm cho bộ sưu tập).
+- Schema `banners`, `collections`, `collection_products` (DATA_MODEL mục 10); màn admin quản lý (tải ảnh gốc desktop/mobile riêng, đi qua pipeline ảnh ở T2.2 với preset `banner-desktop` 1560 và 1040, `banner-mobile` 750 và 480; hẹn giờ bật/tắt, sắp xếp, chọn sản phẩm cho bộ sưu tập). Chốt preset cho banner mega menu (2,2:1) và ảnh tiêu đề khối (7:1), hiện UI_SPEC mục 6 ghi "chưa có preset". Ảnh icon danh mục (T2.1) dùng preset `category-icon` 120 và 240.
 - Admin cấu hình thêm: thanh thông báo, link Zalo, từ khóa phổ biến, danh mục hiện trên trang chủ, nhãn thẻ sản phẩm của bộ sưu tập.
 - Storefront: banner trang chủ, tab bộ sưu tập, các khối bộ sưu tập trên trang chủ, banner trong mega menu Khuyến mãi HOT, `/khuyen-mai`, `/bo-suu-tap/[slug]` (UI_SPEC mục 3.3, 3.4, 4.1, 4.12).
-- Nghiệm thu: banner hết hạn tự ẩn (test với clock giả); link banner chỉ nhận đường dẫn nội bộ; sửa bộ sưu tập làm mới cache trang chủ.
+- Nghiệm thu: banner hết hạn tự ẩn (test với clock giả); link banner chỉ nhận đường dẫn nội bộ; sửa bộ sưu tập làm mới cache trang chủ; banner desktop 1560 ≤ 200 KB và icon danh mục 240 ≤ 15 KB với ảnh mẫu (tự giảm chất lượng theo bậc khi vượt); banner có `width`/`height` và ảnh mờ.
 
 ### T2.10 PWA cơ bản
 - Manifest, icon, apple-touch-icon, service worker tối giản, trang offline, gợi ý cài đặt theo UI_SPEC mục 8.
@@ -183,13 +197,19 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 
 ### T3.1 Giỏ hàng
 - `stores/cart.ts` (Zustand + persist, chỉ `sellUnitId` + `qty`); Server Action `quoteCart` trả giá, tồn, cảnh báo.
-- `CartDrawer` và `/gio-hang` theo UI_SPEC mục 4.6 (thanh tiến độ miễn phí giao hàng, cảnh báo giá/tồn).
+- `CartDrawer` và `/gio-hang` theo UI_SPEC mục 4.6 (khối "Miễn phí giao hàng" không có thanh tiến độ khi chính sách là `FREE`; thanh tiến độ chỉ dành cho `FLAT` có ngưỡng; cảnh báo giá/tồn).
 - Nghiệm thu: sửa localStorage thành giá bất kỳ không ảnh hưởng số tiền hiển thị; sản phẩm ngừng bán hiện cảnh báo và không cho đặt.
 
-### T3.2 Cài đặt cửa hàng, phí ship, chọn kho
-- `store_settings` + màn `/admin/cai-dat` (mục tiền cần step-up).
-- `fulfillment/strategy.ts` (`SingleOnlineWarehouseStrategy`), hàm `shippingFee`, kiểm bán kính.
-- Nghiệm thu: unit test phí ship ở ngưỡng 299.999 / 300.000; tọa độ cách 40,1 km → `OUT_OF_DELIVERY_RANGE`.
+### T3.2 Cài đặt cửa hàng, phí giao hàng, chọn kho
+- `store_settings` (gồm `shipping_policy`, mặc định `FREE`) + màn `/admin/cai-dat` (mục tiền cần step-up, gồm đổi chính sách phí giao hàng; đổi phải ghi audit `settings.shipping_policy.update`).
+- Module `fulfillment/shipping/` với interface `ShippingFeePolicy.quote({deliveryType, subtotal, distanceKm?, provinceCode, wardCode, warehouseId, now})` trả `{fee, policy, breakdown}` (BUSINESS_RULES 4.3, ARCHITECTURE mục 14). Chỉ hiện thực `FreeShippingPolicy` (luôn 0 cho cả `DELIVERY` lẫn `PICKUP`). `FLAT`, `BY_DISTANCE`, `BY_ZONE` ghi "chưa làm" và ném `NotImplementedError`.
+- Cài đặt chọn chính sách chưa hiện thực thì từ chối lưu và từ chối khởi động. Chốt cách kiểm khi khởi động.
+- `fulfillment/strategy.ts` (`SingleOnlineWarehouseStrategy`), kiểm bán kính 40km cho đơn giao tận nơi.
+- Nghiệm thu:
+  - `FreeShippingPolicy` trả `fee = 0`, `policy = "FREE"` cho cả hai hình thức giao nhận, ở `subtotal` 0, 299.999, 300.000 và rất lớn, có hoặc không có `distanceKm`.
+  - Lưu `shipping_policy` là `FLAT`/`BY_DISTANCE`/`BY_ZONE` → bị từ chối; database chứa giá trị đó → khởi động bị từ chối.
+  - Đổi chính sách thiếu step-up → 403; có step-up → ghi audit.
+  - Tọa độ cách 40,1 km → `OUT_OF_DELIVERY_RANGE`; 39,9 km → hợp lệ.
 
 ### T3.3 Lõi tích điểm
 - Hàm thuần theo BUSINESS_RULES mục 8; service ledger: `hold`, `release`, `redeem`, `redeemReturn`, `earn`, `reverse`, `adjust` (đều nhận `tx`).
@@ -204,16 +224,18 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
   - `expectedTotal` lệch → `PRICE_CHANGED`, không tạo đơn, không giữ kho.
   - Flash sale hết suất giữa chừng → lỗi, không giữ kho.
   - 2 đơn song song dùng hết điểm → 1 thành công.
-  - Gửi thêm trường `price`, `total` giả → bị bỏ qua.
+  - Gửi thêm trường `price`, `total` giả (và `shippingFee`, `shippingPolicy` giả) → bị bỏ qua.
   - Khách vãng lai không có captcha → từ chối.
+  - Đơn ghi `shipping_fee = 0`, `shipping_policy = 'FREE'`, `shipping_breakdown` cho cả `DELIVERY` lẫn `PICKUP`; đổi `store_settings.shipping_policy` sau đó không đổi đơn đã đặt; `total = subtotal + shipping_fee - points_discount`.
+  - Thanh toán trước 100%: mọi đơn mới, kể cả `PICKUP`, ở `PENDING_PAYMENT`; không có tham số hay đường nào tạo đơn ở trạng thái khác, không có phương thức thanh toán nào ngoài chuyển khoản; UPDATE thẳng `status` sang `PACKING`/`READY_*`/`OUT_FOR_DELIVERY`/`COMPLETED` khi `paid_at` null bị `CHECK` của database từ chối.
 
 ### T3.5 Trang thanh toán và trạng thái đơn
 - `server/lib/vietqr.ts` (EMVCo + CRC16) + render QR tại chỗ (thư viện QR cần duyệt).
 - `/don-hang/[id]` theo UI_SPEC mục 4.8: QR, nút "Lưu ảnh QR", các ô chép nhanh, đếm ngược theo server, nút hủy (khi chờ thanh toán), stepper trạng thái.
-- View token cho khách vãng lai (cookie + link), `requireOrderAccess`.
+- View token cho khách vãng lai (cookie + link), `requireOrderAccess`. Trang có token trên URL đặt `Referrer-Policy: no-referrer` (thêm vào `headers.ts` và test header).
 - `GET /api/orders/[id]/status` + hook `useOrderStatus` (polling, `visibilitychange`, dừng khi trạng thái cuối).
 - Tham khảo UI: `VietQRModal.tsx`, `order-success/[id]/page.tsx`.
-- Nghiệm thu: test chuỗi VietQR với mẫu đã biết; truy cập đơn không có quyền → 404; link có token đặt cookie rồi chuyển về URL sạch; poll bị rate limit đúng ngưỡng.
+- Nghiệm thu: test chuỗi VietQR với mẫu đã biết; truy cập đơn không có quyền → 404; link có token đặt cookie rồi chuyển về URL sạch; trang có token trả `Referrer-Policy: no-referrer` (test HTTP); poll bị rate limit đúng ngưỡng.
 
 ### T3.6 Webhook SePay
 - Làm đúng BUSINESS_RULES mục 5.3 và 5.4.
@@ -224,6 +246,7 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
   - 2 webhook khác id cùng mã đơn → 1 MATCHED, 1 `DUPLICATE_OR_EXTRA`.
   - Sai số tiền / sai tài khoản / không có mã / đơn hết hạn → đúng loại ngoại lệ, đơn không đổi.
   - Body trả về đúng `{"success": true}` với HTTP 200.
+  - Thanh toán trước 100%: đơn `PICKUP` cũng chỉ sang `PAID` qua webhook/đối soát/admin ngoại lệ; đơn chưa `PAID` không có `handover_nonce`, không có `payments`, kho chỉ ở trạng thái giữ.
 
 ### T3.7 Hết hạn và khách hủy
 - Route cron `expire-orders` (kiểm `CRON_SECRET`), expire tại chỗ khi poll; khách hủy đơn chờ thanh toán.
@@ -256,6 +279,9 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 - `/admin/don-hang`: tab theo trạng thái, tìm theo mã; chi tiết đơn; nhận/trả đơn; checklist từng món; chuyển `READY_*`, `OUT_FOR_DELIVERY`, `DELIVERY_FAILED` (lý do); link Google Maps; SĐT khách chỉ hiện khi đơn đang xử lý.
 - Tham khảo UI: `admin/orders/page.tsx`.
 - Nghiệm thu: chuyển trạng thái sai thứ tự → lỗi; hai nhân viên cùng nhận một đơn → một người thành công.
+- Thanh toán trước 100% (BUSINESS_RULES 5.0):
+  - Bảng đơn của nhân viên không liệt kê đơn `PENDING_PAYMENT`; không có nút, route hay hàm nào cho nhân viên "xác nhận đã thu tiền", "đã thanh toán" hay nhập số tiền thu (test quét tĩnh tên route/action và test quyền: staff gọi API đánh dấu thanh toán → 403 hoặc không tồn tại).
+  - Test máy trạng thái: mọi cặp `PENDING_PAYMENT` → trạng thái khác `PAID`/`EXPIRED`/`CANCELLED` (gồm `PACKING`, `READY_FOR_PICKUP`, `READY_TO_SHIP`, `OUT_FOR_DELIVERY`, `DELIVERY_FAILED`, `COMPLETED`) bị từ chối với mọi vai trò, cả đơn `PICKUP`; nhận đóng gói một đơn `PENDING_PAYMENT` → lỗi.
 
 ### T4.2 Bàn giao
 - Sinh nonce khi PAID; hàm tính token/PIN; trang đơn của khách hiện QR + PIN đúng trạng thái.
@@ -263,6 +289,7 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 - Hoàn tất → `COMPLETED` + `earn` điểm + cập nhật `lifetime_spent`, hạng.
 - Tham khảo UI: `QRScannerModal.tsx` (bỏ danh sách quét nhanh).
 - Nghiệm thu: đơn chưa `READY_*`/`OUT_FOR_DELIVERY` không bàn giao được; không API nào của staff trả token/PIN; PIN sai 5 lần → khóa + cảnh báo.
+- Thanh toán trước 100%: màn bàn giao không có ô hay nút thu tiền mặt; đơn `PICKUP` chưa `PAID` không có token/PIN và không bàn giao được; không đường nào tới `COMPLETED` khi `paid_at` null (test cả ở tầng service lẫn `CHECK` database).
 
 ### T4.3 Hủy đơn đã thanh toán và hoàn tiền
 - Admin hủy (step-up, lý do), nhập lại kho, trả điểm; màn `/admin/hoan-tien` ghi nhận và hoàn tất hoàn tiền; hoàn một phần cho đơn đã xong.
@@ -343,7 +370,7 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 ## Giai đoạn 8: Sau mở bán (backlog, lên kế hoạch chi tiết sau)
 
 - Mã giảm giá / voucher
-- Phí ship theo km (kèm geocoding phía server)
+- Phí giao hàng tính lại (chọn `FLAT`, theo km kèm geocoding phía server, hoặc theo khu vực; xem Q16)
 - Thông báo cho khách qua SMS/Zalo ZNS (outbox)
 - Khách vãng lai tra cứu đơn bằng SĐT + mã đơn + OTP
 - Đa kho: `NearestWarehouseWithFullStockStrategy`, UI quản lý kho, nhân viên theo kho

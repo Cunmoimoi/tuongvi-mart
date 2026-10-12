@@ -7,7 +7,7 @@
 | `CLAUDE.md` (thư mục gốc) | Claude Code (tự đọc mỗi phiên) | Quy tắc bắt buộc, bất biến bảo mật, lệnh, cách làm việc |
 | `docs/ARCHITECTURE.md` | Claude Code + bạn | Hạ tầng, sơ đồ, cấu trúc thư mục, đăng nhập, luồng thanh toán |
 | `docs/DATA_MODEL.md` | Claude Code | Bảng dữ liệu, ràng buộc, quyền database |
-| `docs/BUSINESS_RULES.md` | Claude Code + bạn | Quy tắc bán hàng: giá, ship, điểm, trạng thái đơn, thanh toán, bàn giao |
+| `docs/BUSINESS_RULES.md` | Claude Code + bạn | Quy tắc bán hàng: giá, phí giao hàng, điểm, trạng thái đơn, thanh toán, bàn giao |
 | `docs/SECURITY.md` | Claude Code + bạn | Các mối đe dọa, cách chặn, test bắt buộc, xử lý sự cố, checklist mở bán |
 | `docs/UI_SPEC.md` | Claude Code + bạn | Giao diện: màu, chữ, bố cục từng trang trên máy tính và điện thoại, PWA |
 | `docs/reference/kfm-desktop/` | Claude Code | 15 ảnh chụp tham chiếu bố cục desktop (đã che thông tin cá nhân). Giữ trên máy, không commit lên git |
@@ -68,10 +68,10 @@ Lưu ý: Supabase Free tự tạm dừng project sau một thời gian không d�
 
 ### Nhận diện thương hiệu (cần trước T0.8)
 - [ ] Logo Tường Vi Mart (bản ngang, bản vuông cho icon app 512×512), xác nhận màu chính (mặc định xanh lá + cam).
-- [ ] Ảnh banner riêng cho desktop (3,9:1) và mobile (16:9), icon danh mục (UI_SPEC mục 6). Trước khi có ảnh thật, Claude Code dùng ảnh giữ chỗ.
+- [ ] Ảnh banner riêng cho desktop (3,9:1) và mobile (16:9), icon danh mục (UI_SPEC mục 6). Chỉ cần ảnh gốc (JPEG/PNG/WebP, ≤ 12 MB), hệ thống tự nén. Trước khi có ảnh thật, Claude Code dùng ảnh giữ chỗ.
 
 ### Dữ liệu cửa hàng (cần trước giai đoạn 2)
-- [ ] Danh sách sản phẩm: tên, danh mục, đơn vị gốc, các quy cách bán và giá, ảnh (nên chụp thật, không dùng ảnh lấy từ web khác).
+- [ ] Danh sách sản phẩm: tên, danh mục, đơn vị gốc, các quy cách bán và giá, ảnh gốc (JPEG/PNG/WebP, ≤ 12 MB, hệ thống tự nén; nên chụp thật, không dùng ảnh lấy từ web khác).
 - [ ] Địa chỉ và tọa độ chính xác của kho online, giờ mở cửa, hotline.
 
 ## 4. Nhật ký quyết định
@@ -113,6 +113,9 @@ Lưu ý: Supabase Free tự tạm dừng project sau một thời gian không d�
 | N25 | `env.ts` coi chuỗi rỗng là chưa đặt | `.env.local` sao chép từ `.env.example` để trống biến chưa dùng (`SEPAY_API_TOKEN=`), mà schema cũ báo lỗi `>=1 characters`. Trước T0.5 chưa có code nào import `env` nên lỗi nằm im; middleware chạy ở mọi request nên lộ ra thành 500 toàn bộ. Sửa trong `parseEnv`: `""` thành `undefined`. Production không dễ dãi hơn: biến bắt buộc ở staging/production vẫn bị từ chối khi thiếu hoặc rỗng (có test từng biến). Hệ quả thêm: vì middleware gọi `env` ở mọi request, cấu hình production sai (thiếu secret, dùng mock) làm MỌI request trả 500, đúng tinh thần bất biến 7 |
 | N26 | Dùng `src/proxy.ts` (hàm `proxy`) thay cho `src/middleware.ts` | Next.js 16 đổi tên convention `middleware` thành `proxy`; tên cũ bị deprecated và build in cảnh báo. Đã đổi ở T0.5b theo tài liệu `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md` (đổi tên file và hàm, `config.matcher` giữ nguyên). Logic nằm ở `server/security/headers.ts` nên không đổi. Proxy chạy trên Node.js runtime thay vì Edge |
 | N27 | Tắt `agentRules` trong `next.config.ts` | Từ Next.js 16.3, `next dev` tự ghi khối `nextjs-agent-rules` vào `CLAUDE.md` (và tạo `AGENTS.md`) mỗi lần chạy, làm bẩn working tree. CLAUDE.md do dự án tự quản lý nên đặt `agentRules: false` (guide `ai-agents.md`, mục "Opting out"). Đổi lại, agent không được nhắc tự động đọc docs trong `node_modules/next/dist/docs/`; CLAUDE.md đã có dòng "Tra tài liệu chính thức" |
+| N28 | Phí giao hàng giai đoạn đầu miễn phí; tách module `ShippingFeePolicy` | Chỉ hiện thực `FreeShippingPolicy` (luôn 0, cả giao tận nơi lẫn nhận tại cửa hàng). `FLAT`, `BY_DISTANCE`, `BY_ZONE` chưa làm; cài đặt chọn chính sách chưa làm thì bị từ chối khi lưu và khi khởi động. `store_settings.shipping_policy` (mặc định `FREE`, đổi cần MFA step-up + audit); `orders` chốt `shipping_fee`, `shipping_policy`, `shipping_breakdown` lúc đặt. `shipping_fee_flat` và `free_shipping_threshold` thành tham số dự phòng của `FLAT`. Giao diện hiện "Miễn phí giao hàng" và ẩn thanh tiến độ. Bán kính 40km vẫn kiểm. Thay thế mức 20.000đ / miễn phí từ 300.000đ ở bản đầu của Q3 |
+| N29 | Thanh toán trước 100%, không COD, không thu tiền mặt | Mọi đơn, kể cả nhận tại cửa hàng, chuyển khoản xong mới được xử lý. Nhân viên không có chức năng xác nhận đã thu tiền; máy trạng thái không có đường từ `PENDING_PAYMENT` tới `PACKING`, `READY_*`, `OUT_FOR_DELIVERY`, `COMPLETED`; thêm `CHECK` `paid_at` ở `orders` làm lớp thứ hai. Thành quy tắc ở BUSINESS_RULES 5.0 và bất biến 19 trong CLAUDE.md. Hệ quả: muốn nhận tiền mặt về sau phải đổi tài liệu trước |
+| N30 | Ảnh: admin chỉ tải ảnh gốc, hệ thống tự nén theo kích thước hiển thị | Ảnh gốc ≤ 12 MB, ≤ 40 megapixel, tải lên bucket riêng tư `incoming` bằng signed URL (request qua hàm serverless bị giới hạn dung lượng); route xử lý kiểm loại bằng nội dung thật, `sharp` xoay theo EXIF và xóa metadata, lưu bản chuẩn hóa ≤ 2400px rồi tạo các bản WebP theo preset vào bucket công khai. Hiển thị bằng `AppImage` + custom loader, không dùng bộ tối ưu ảnh của Next.js. Hạn mức 5 MB cũ được nâng lên 12 MB vì ảnh gốc được nén phía server. `sharp` là dependency mới, xin duyệt ở T2.2. Chi tiết ở ARCHITECTURE mục 15 |
 
 ## 5. Câu hỏi mở
 
@@ -122,7 +125,7 @@ Claude Code sẽ dùng giá trị mặc định cho tới khi bạn trả lời.
 |---|---|---|
 | Q1 | Ngưỡng hạng VIP: 2/5/10 triệu (theo code cũ) hay 3/10/25 triệu (theo báo cáo cũ)? | 2/5/10 triệu |
 | Q2 | Cộng điểm khi đơn hoàn tất hay khi vừa thanh toán? | Khi hoàn tất |
-| Q3 | Phí ship 20.000đ, miễn phí từ 300.000đ, bán kính 40km: giữ nguyên? | Giữ nguyên |
+| Q3 | Phí giao hàng và bán kính giao | Đã chốt (N28): giai đoạn đầu MIỄN PHÍ cho cả giao tận nơi lẫn nhận tại cửa hàng; bán kính giao 40km giữ nguyên. Cách tính lại về sau: xem Q16 |
 | Q4 | Giờ mở cửa, khung giờ nhận hàng tại quầy? | 7:00–21:00, khung 30 phút |
 | Q5 | Ngân hàng nhận tiền; tài khoản doanh nghiệp hay cá nhân? | Chưa có, bắt buộc trước giai đoạn 3 |
 | Q6 | Nhà cung cấp SMS OTP? | Chưa có, bắt buộc trước khi mở bán |
@@ -135,3 +138,17 @@ Claude Code sẽ dùng giá trị mặc định cho tới khi bạn trả lời.
 | Q13 | Hình thức kinh doanh: hộ kinh doanh hay công ty? | Chưa rõ (ảnh hưởng thông tin chân trang và hóa đơn) |
 | Q14 | Production chạy trên dịch vụ quản lý sẵn (Vercel Pro + Supabase Pro) hay VPS tự quản (rẻ hơn, phải tự lo backup, vá lỗi, bảo mật máy chủ)? | Quyết định trước giai đoạn 7; mặc định dịch vụ quản lý sẵn |
 | Q15 | Giới hạn "theo ngày" (OTP 5 lần/ngày/SĐT, 20 lần/ngày/IP): đếm lại lúc 0h giờ Việt Nam, hay cứ 24 giờ liên tục kể từ lần đầu? | Cửa sổ 24 giờ căn theo UTC, tức đếm lại lúc 7h sáng giờ Việt Nam. Muốn 0h giờ Việt Nam thì thêm độ lệch múi giờ vào `getWindowStart` |
+| Q16 | Khi tính lại phí giao hàng: theo km hay theo khu vực (tỉnh, phường/xã)? | Chưa quyết định; chạy chính sách `FREE` (N28). Ưu nhược bên dưới |
+
+### Q16: so sánh hai hướng tính phí
+
+| | Theo km (`BY_DISTANCE`) | Theo khu vực (`BY_ZONE`) |
+|---|---|---|
+| Ưu | Phí tăng đều theo quãng đường, không có ranh giới đột ngột | Dựa trên bảng `admin_units` (tỉnh, phường/xã) đã có sẵn, không cần tọa độ chính xác |
+| | | Báo giá cho khách dễ: tra bảng theo phường/xã, có thể hiện trước khi ghim bản đồ |
+| | | Dễ kiểm thử (tra bảng), không phụ thuộc dịch vụ bản đồ ngoài |
+| Nhược | Cần định vị phía server (geocoding địa chỉ) vì tọa độ do khách gửi có thể bị sửa để giảm phí | Cần thêm bảng phí theo khu vực và màn admin để duy trì |
+| | Khoảng cách Haversine là đường chim bay, khác đường đi thật; phải chốt cách làm tròn km | Ranh giới đột ngột: hai nhà sát nhau nhưng khác phường có thể khác phí |
+| | Khách khó đoán phí trước khi nhập địa chỉ; phụ thuộc dịch vụ geocoding (giới hạn, chi phí) | Đơn vị hành chính đổi thì phải cập nhật bảng phí; phường rộng thì chênh lệch quãng đường lớn |
+
+Bán kính giao tối đa 40km vẫn áp dụng bất kể chọn hướng nào. Có thể kết hợp (khu vực để báo giá, km để kiểm tra), nhưng cần bạn chọn trước khi làm.
