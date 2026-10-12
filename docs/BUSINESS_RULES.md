@@ -19,10 +19,12 @@ Các con số đánh dấu (*) là giá trị mặc định đang chờ chủ d�
 | Sản phẩm, danh mục, flash sale, nhập kho, điều chỉnh kho | | | | có |
 | Danh sách khách, khóa khách, điều chỉnh điểm | | | | có (điều chỉnh > 100 điểm cần MFA step-up) |
 | Quản lý nhân viên | | | | có + MFA step-up |
-| Cài đặt cửa hàng, tích điểm | | | | có (mục liên quan tiền cần MFA step-up) |
+| Cài đặt cửa hàng, tích điểm | | | | có (mục liên quan tiền, gồm đổi chính sách phí giao hàng, cần MFA step-up) |
 | Báo cáo, xuất CSV, nhật ký audit | | | | có |
 
 Khách bị khóa (`LOCKED`) không đăng nhập và không đặt hàng được.
+
+Không vai trò nào có chức năng "xác nhận đã thu tiền", "đánh dấu đã thanh toán" hay thu tiền mặt (mục 5.0). Staff chỉ làm việc với đơn đã `PAID`.
 
 ## 2. Giá, quy cách, flash sale, combo
 
@@ -57,6 +59,8 @@ Khách bị khóa (`LOCKED`) không đăng nhập và không đặt hàng đư�
 
 `COMPLETED` và `CANCELLED` là trạng thái cuối. Hoàn tiền sau khi hoàn tất được ghi bằng bản ghi `refunds`, không đổi trạng thái đơn.
 
+Từ `PENDING_PAYMENT` chỉ có đúng 3 đường đi: `PAID`, `EXPIRED`, `CANCELLED`. Không có đường tới `PACKING`, `READY_FOR_PICKUP`, `READY_TO_SHIP`, `OUT_FOR_DELIVERY`, `DELIVERY_FAILED` hay `COMPLETED`, với bất kỳ vai trò hay loại đơn nào, kể cả `PICKUP` (mục 5.0).
+
 Cài đặt: `orders/state-machine.ts` định nghĩa bảng chuyển trạng thái. Hàm `transition(tx, orderId, from, to, actor, reason?)` thực hiện `UPDATE ... WHERE id = $1 AND status = $from`; nếu 0 dòng bị ảnh hưởng thì ném `ConcurrentStateChange`. Mỗi lần chuyển ghi `order_status_history` và `audit_logs` (nếu actor là staff/admin). Có test cho mọi cặp chuyển hợp lệ và một số cặp không hợp lệ.
 
 ## 4. Đặt hàng (checkout)
@@ -81,29 +85,51 @@ captchaToken?: string (bắt buộc với khách vãng lai)
 1. Rate limit (theo IP: 10 lần/10 phút; theo hội viên: 20 lần/giờ). Khách vãng lai phải qua Turnstile.
 2. `idempotencyKey` đã tồn tại và cùng chủ → trả lại đơn cũ, không tạo mới.
 3. Nạp quy cách, sản phẩm, flash sale, thành phần combo từ DB. Quy cách/sản phẩm ngừng bán → lỗi `ITEM_UNAVAILABLE`.
-4. Tính giá bằng `priceCart`, phí ship (mục 4.3), điểm (mục 8).
-5. Nếu `expectedTotal` khác tổng tính được → trả `PRICE_CHANGED` kèm báo giá mới, KHÔNG tạo đơn. Giao diện hiện rõ khác biệt, khách xác nhận lại.
-6. Kiểm tra `min_order_amount`, hàng có cồn cần `ageConfirmed`.
-7. Chọn kho (`fulfillment/strategy.ts`); đơn giao tận nơi phải có tọa độ và nằm trong bán kính giao của kho, nếu không trả `OUT_OF_DELIVERY_RANGE` và gợi ý lấy tại cửa hàng.
+4. Tính giá bằng `priceCart`.
+5. Chọn kho (`fulfillment/strategy.ts`); đơn giao tận nơi phải có tọa độ và nằm trong bán kính giao của kho, nếu không trả `OUT_OF_DELIVERY_RANGE` và gợi ý lấy tại cửa hàng. Tính `distanceKm` ở bước này.
+6. Tính phí giao bằng `ShippingFeePolicy.quote(...)` (mục 4.3) và điểm (mục 8), suy ra `total`. Kiểm tra `min_order_amount`, hàng có cồn cần `ageConfirmed`.
+7. Nếu `expectedTotal` khác tổng tính được → trả `PRICE_CHANGED` kèm báo giá mới, KHÔNG tạo đơn. Giao diện hiện rõ khác biệt, khách xác nhận lại.
 8. Mở transaction:
    - Quy đổi mọi dòng (kể cả combo) về `(product_id, base_qty_total)`, cộng dồn theo sản phẩm, sắp xếp theo `product_id` để tránh deadlock.
    - Giữ kho từng sản phẩm: `UPDATE stock_levels SET reserved = reserved + $q WHERE warehouse_id = $w AND product_id = $p AND on_hand - reserved - safety_stock >= $q`. 0 dòng → rollback, trả `OUT_OF_STOCK` kèm danh sách sản phẩm thiếu.
    - Giữ suất flash sale: `UPDATE flash_sales SET quantity_sold = quantity_sold + $q WHERE id = $id AND (quantity_cap IS NULL OR quantity_sold + $q <= quantity_cap)`.
    - Giữ điểm: `SELECT ... FROM customers WHERE id = $c FOR UPDATE`, kiểm tra điểm khả dụng, tăng `points_held`, ghi ledger `HOLD`.
    - Sinh `order_code` (mục 5.1), thử lại tối đa 5 lần nếu trùng.
-   - Tạo `orders`, `order_items` (snapshot tên, quy cách, giá, thành phần combo), `stock_reservations`, `order_status_history`.
+   - Tạo `orders` (kèm `shipping_fee`, `shipping_policy`, `shipping_breakdown` chốt tại đây), `order_items` (snapshot tên, quy cách, giá, thành phần combo), `stock_reservations`, `order_status_history`. Mọi đơn, kể cả `PICKUP`, bắt đầu ở `PENDING_PAYMENT`.
    - Khách vãng lai: sinh view token 32 byte, lưu HMAC của token, hạn 60 ngày.
 9. Trả về `orderId`, `orderCode`, thông tin chuyển khoản, chuỗi VietQR, `expiresAt`. Khách vãng lai: set cookie httpOnly `ov_<orderId>` chứa view token (path `/don-hang/<orderId>`), đồng thời hiện link có token để khách lưu lại.
 
-### 4.3 Giao nhận và phí ship
+### 4.3 Giao nhận và phí giao hàng
 
-- `PICKUP`: phí 0. Chọn khung giờ lấy trong giờ mở cửa (`opening_hours`, khung 30 phút), sớm nhất sau 60 phút tính từ lúc đặt.
-- `DELIVERY`: bắt buộc ghim vị trí trên bản đồ + địa chỉ (tỉnh/thành, phường/xã, số nhà đường). Khoảng cách Haversine từ kho ≤ `delivery_radius_km` (mặc định 40).
-- Phí: `subtotal >= free_shipping_threshold` (300.000đ*) → 0; ngược lại `shipping_fee_flat` (20.000đ*).
+- `PICKUP`: chọn khung giờ lấy trong giờ mở cửa (`opening_hours`, khung 30 phút), sớm nhất sau 60 phút tính từ lúc đặt. Vẫn phải chuyển khoản trước như mọi đơn (mục 5.0); đến quầy chỉ để nhận hàng.
+- `DELIVERY`: bắt buộc ghim vị trí trên bản đồ + địa chỉ (tỉnh/thành, phường/xã, số nhà đường). Khoảng cách Haversine từ kho ≤ `delivery_radius_km` (mặc định 40). Kiểm tra bán kính này áp dụng cho mọi chính sách phí, kể cả khi phí bằng 0.
 - Ngoài giờ mở cửa vẫn nhận đơn, nhưng hiện thông báo thời điểm bắt đầu xử lý.
-- Lưu ý: tọa độ do khách gửi. Khi sau này tính phí theo km, phải đối chiếu tọa độ với địa chỉ (geocoding phía server) hoặc để nhân viên xác nhận, tránh khách sửa tọa độ để giảm phí.
+
+**Phí giao hàng do một chính sách riêng quyết định** (module `src/server/modules/fulfillment/shipping/`, interface `ShippingFeePolicy`, xem ARCHITECTURE mục 14):
+
+```
+quote({ deliveryType, subtotal, distanceKm?, provinceCode, wardCode, warehouseId, now })
+  → { fee: int VND >= 0, policy: "FREE" | "FLAT" | "BY_DISTANCE" | "BY_ZONE", breakdown: jsonb }
+```
+
+- `distanceKm` chỉ có với `DELIVERY`. Với `PICKUP`, `provinceCode` và `wardCode` là của kho.
+- `FREE` (đã hiện thực, mặc định): `fee = 0` cho cả `DELIVERY` lẫn `PICKUP`, bất kể `subtotal` và khoảng cách. Giai đoạn đầu mở bán MIỄN PHÍ giao hàng cho mọi đơn trong bán kính giao.
+- `FLAT`, `BY_DISTANCE`, `BY_ZONE`: CHƯA LÀM. Chưa quyết định tính theo km hay theo khu vực (Q16). `FLAT` dùng `shipping_fee_flat` và `free_shipping_threshold` của `store_settings` làm tham số dự phòng; hai cột này không có tác dụng khi chính sách là `FREE`.
+- Chính sách đang dùng lấy từ `store_settings.shipping_policy`. Cài đặt chọn chính sách chưa hiện thực thì bị từ chối khi lưu; nếu giá trị đó vẫn xuất hiện trong database thì ứng dụng từ chối khởi động và `placeOrder` báo lỗi nội bộ, không bao giờ tự rơi về 0 hay một mức phí mặc định. Đổi chính sách cần MFA step-up và ghi audit.
+- Đơn đã đặt giữ nguyên phí đã chốt: `orders.shipping_fee`, `shipping_policy`, `shipping_breakdown` được ghi lúc đặt, đổi chính sách về sau không tính lại đơn cũ. Công thức `total = subtotal + shipping_fee - points_discount` giữ nguyên.
+- Lưu ý khi làm chính sách theo km: tọa độ do khách gửi, nên phải xác định vị trí phía server (geocoding địa chỉ) hoặc để nhân viên xác nhận, tránh khách sửa tọa độ để giảm phí (Q16).
 
 ## 5. Thanh toán
+
+### 5.0 Thanh toán trước 100% (quy tắc tường minh)
+
+- Mọi đơn, kể cả `PICKUP`, phải chuyển khoản đủ `total` qua VietQR và được xác nhận theo mục 5.3–5.5 rồi mới được xử lý. Chưa `PAID` thì chỉ giữ kho, không đóng gói, không giao, không bàn giao.
+- KHÔNG có COD, không trả tiền khi nhận hàng, không thu tiền mặt (hay quẹt thẻ) tại quầy cho đơn online. Khách đến lấy hàng chỉ để nhận hàng (mục 6).
+- Nhân viên KHÔNG có chức năng "xác nhận đã thu tiền", "đánh dấu đã thanh toán" hay nhập số tiền đã thu. Giao diện và API của staff không có hành động nào làm đơn sang `PAID`.
+- Chỉ 3 nguồn đưa đơn sang `PAID`: webhook SePay có chữ ký hợp lệ, job đối soát SePay, và admin xử lý giao dịch ngoại lệ (MFA step-up, ghi chú bắt buộc, audit). Đây cũng là bất biến 3 và 19 trong CLAUDE.md.
+- Máy trạng thái (mục 3): từ `PENDING_PAYMENT` chỉ đi được tới `PAID`, `EXPIRED`, `CANCELLED`.
+- Lớp phòng thủ thứ hai ở database: `orders` có `CHECK` buộc mọi đơn ngoài `PENDING_PAYMENT`, `EXPIRED`, `CANCELLED` phải có `paid_at` (DATA_MODEL mục 6).
+- Muốn nhận tiền mặt hay COD sau này thì phải đổi tài liệu này trước (có chủ dự án đồng ý), không thêm tùy chọn ẩn trong code.
 
 ### 5.1 Mã đơn / mã thanh toán
 
@@ -186,7 +212,7 @@ Công thức (số nguyên, làm tròn xuống):
 - `maxPointsUsable = floor(subtotal * max_redeem_bps / (10000 * point_value_vnd))`
 - `pointsUsed = min(pointsRequested, points_balance - points_held, maxPointsUsable)`
 - `points_discount = pointsUsed * point_value_vnd`
-- `eligibleAmount = subtotal - points_discount` (không tính phí ship)
+- `eligibleAmount = subtotal - points_discount` (không tính phí giao hàng)
 - `pointsEarned = floor(eligibleAmount * earn_bps / (10000 * point_value_vnd))`, với `earn_bps` là hạng của khách tại thời điểm hoàn tất
 
 Ví dụ kiểm tra (phải có trong unit test):
@@ -236,5 +262,5 @@ Vòng đời:
 | Nhập PIN bàn giao sai | 5 lần thì khóa bàn giao của đơn |
 | Poll trạng thái | 60 request/phút theo IP + đơn |
 | Đặt hàng | 10 lần/10 phút/IP |
-| Ảnh sản phẩm | JPEG/PNG/WebP, ≤ 5 MB, tối đa 8 ảnh |
+| Ảnh sản phẩm (ảnh gốc admin tải lên) | JPEG/PNG/WebP, ≤ 12 MB, ≤ 40 megapixel, tối đa 8 ảnh mỗi sản phẩm; hệ thống tự nén theo kích thước hiển thị (ARCHITECTURE mục 15) |
 | Nhập Excel | ≤ 2.000 dòng/lần, ≤ 5 MB |

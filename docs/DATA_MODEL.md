@@ -48,11 +48,11 @@ select app.make_append_only(
 
 ## 3. Danh mục và sản phẩm
 
-**categories**: `id`, `parent_id NULL` FK (tối đa 3 cấp, kiểm trong service + test), `name`, `slug` UNIQUE, `image_path` (icon danh mục), `seo_content text NULL` (khối "Thông tin về danh mục"), `show_on_home bool default false`, `sort_order int`, `is_active bool`, `deleted_at`, timestamps. Index `(parent_id, sort_order)`.
+**categories**: `id`, `parent_id NULL` FK (tối đa 3 cấp, kiểm trong service + test), `name`, `slug` UNIQUE, `image_path` (icon danh mục; đường dẫn bản chuẩn hóa, xem mục 10.1), `width int`, `height int`, `bytes int`, `variants jsonb`, `blur_data_url text`, `seo_content text NULL` (khối "Thông tin về danh mục"), `show_on_home bool default false`, `sort_order int`, `is_active bool`, `deleted_at`, timestamps. Index `(parent_id, sort_order)`.
 
 **products**: `id`, `category_id` FK (gắn vào danh mục cấp thấp nhất), `name`, `slug` UNIQUE, `description`, `origin`, `brand`, `shelf_life`, `ingredients`, `usage_instructions`, `storage_instructions`, `base_unit_name` (vd "Chai", "Gói", "100g"), `type` (`SIMPLE` | `COMBO`), `is_active`, `is_alcohol bool default false`, `badges text[]`, `search_vector tsvector` (generated, dùng `unaccent`), `deleted_at`, timestamps.
 
-**product_images**: `id`, `product_id` FK, `storage_path`, `alt`, `sort_order`, `is_primary`. Một sản phẩm tối đa 8 ảnh. UNIQUE partial `(product_id) WHERE is_primary`.
+**product_images**: `id`, `product_id` FK, `storage_path` (bản chuẩn hóa trong bucket riêng tư), `width int`, `height int`, `bytes int`, `variants jsonb`, `blur_data_url text`, `alt`, `sort_order`, `is_primary`. Một sản phẩm tối đa 8 ảnh. UNIQUE partial `(product_id) WHERE is_primary`. Các cột ảnh giải thích ở mục 10.1.
 
 **sell_units** (quy cách bán, thay cho `unitConversions` cũ): `id`, `product_id` FK, `sku` UNIQUE, `barcode`, `name` (vd "Lốc 4", "Thùng 24"), `base_qty int CHECK (base_qty >= 1)`, `price bigint CHECK (price >= 0)`, `compare_at_price bigint NULL`, `is_default bool`, `is_active`, `max_per_order int default 50`. UNIQUE partial `(product_id) WHERE is_default`.
 Quy tắc: không còn phép "chia". Nếu cần bán 500g từ hàng tính theo kg, đặt đơn vị gốc là 100g.
@@ -94,8 +94,9 @@ Số bán được online = `on_hand - reserved - safety_stock`.
 - Chủ đơn: `customer_id NULL` FK, `guest_view_token_hash bytea NULL`, `guest_view_token_expires_at`.
 - Giao nhận: `delivery_type` (`DELIVERY` | `PICKUP`), `warehouse_id` FK, `recipient_name`, `recipient_phone`, `province_code`, `ward_code`, `street`, `lat`, `lng`, `distance_km numeric(6,2)`, `pickup_slot_start`, `pickup_slot_end`, `customer_note`.
 - Tiền (snapshot lúc đặt): `subtotal`, `shipping_fee`, `points_used int`, `points_discount`, `total` (tất cả `bigint CHECK >= 0`), `CHECK (total = subtotal + shipping_fee - points_discount)`.
+- Phí giao (chốt lúc đặt, không tính lại): `shipping_policy text` (`FREE` | `FLAT` | `BY_DISTANCE` | `BY_ZONE`; hiện chỉ ghi `FREE`), `shipping_breakdown jsonb` (lý do tính phí, ví dụ `{"rule":"FREE"}`). `shipping_fee` giữ nguyên là số tiền đã chốt, hiện luôn bằng 0.
 - Điểm: `points_to_earn int` (ước tính lúc đặt, chỉ để hiển thị), `points_earned int NULL` (ghi khi COMPLETED).
-- Trạng thái: `status` (xem BUSINESS_RULES 3), `expires_at`, `paid_at`, `packing_started_at`, `packed_at`, `out_for_delivery_at`, `completed_at`, `cancelled_at`, `cancel_reason`, `refund_status` (`NONE` | `PENDING` | `PARTIAL` | `DONE`), `assigned_staff_id NULL`.
+- Trạng thái: `status` (xem BUSINESS_RULES 3), `CHECK (paid_at IS NOT NULL OR status IN ('PENDING_PAYMENT','EXPIRED','CANCELLED'))` (thanh toán trước 100%, BUSINESS_RULES 5.0), `expires_at`, `paid_at`, `packing_started_at`, `packed_at`, `out_for_delivery_at`, `completed_at`, `cancelled_at`, `cancel_reason`, `refund_status` (`NONE` | `PENDING` | `PARTIAL` | `DONE`), `assigned_staff_id NULL`.
 - Bàn giao: `handover_nonce bytea NULL` (sinh khi PAID; token/PIN được tính từ nonce + `HANDOVER_SECRET`, không lưu), `handover_failed_attempts int default 0`, `handover_locked bool default false`, `handover_verified_at`, `handover_verified_by`.
 - `contains_alcohol bool`, `age_confirmed_at NULL`.
 - `version int` (tăng mỗi lần cập nhật, dùng cho optimistic locking ở màn admin), timestamps.
@@ -129,7 +130,7 @@ UNIQUE partial `(order_id, type) WHERE type IN ('HOLD','RELEASE','REDEEM','REDEE
 
 ## 9. Cài đặt, bảo mật, phân tích
 
-**store_settings** (một dòng, có `version`): `shipping_fee_flat bigint default 20000`, `free_shipping_threshold bigint default 300000`, `payment_window_minutes int default 15`, `opening_hours jsonb`, `pickup_slot_minutes int default 30`, `hotline`, `store_name`, `min_order_amount bigint default 0`, `popular_search_terms text[]`, `announcement_text varchar(160) NULL`, `announcement_link` (chỉ đường dẫn nội bộ), `zalo_url NULL`, `updated_by`.
+**store_settings** (một dòng, có `version`): `shipping_policy text default 'FREE'` (`FREE` | `FLAT` | `BY_DISTANCE` | `BY_ZONE`; service chỉ cho lưu chính sách đã hiện thực, hiện chỉ `FREE`; đổi cần MFA step-up + audit `settings.shipping_policy.update`), `shipping_fee_flat bigint default 20000` và `free_shipping_threshold bigint default 300000` (chỉ là tham số dự phòng của chính sách `FLAT`, không dùng khi `FREE`), `payment_window_minutes int default 15`, `opening_hours jsonb`, `pickup_slot_minutes int default 30`, `hotline`, `store_name`, `min_order_amount bigint default 0`, `popular_search_terms text[]`, `announcement_text varchar(160) NULL`, `announcement_link` (chỉ đường dẫn nội bộ), `zalo_url NULL`, `updated_by`.
 KHÔNG chứa thông tin tài khoản nhận tiền.
 
 **audit_logs** (chỉ INSERT): `id`, `actor_type`, `actor_id`, `action` (vd `product.update`, `refund.complete`, `staff.deactivate`, `auth.login_failed`), `entity_type`, `entity_id`, `before jsonb` và `after jsonb` (đã che dữ liệu nhạy cảm), `ip inet`, `user_agent`, `request_id`, `created_at`. Index `(entity_type, entity_id)`, `(actor_id, created_at)`, `(action, created_at)`.
@@ -144,13 +145,27 @@ KHÔNG chứa thông tin tài khoản nhận tiền.
 
 ## 10. Nội dung hiển thị (banner, bộ sưu tập)
 
-**banners**: `id`, `placement` (`HOME_HERO` | `MEGA_MENU_PROMO` | `CATEGORY_TOP` | `PROMO_PAGE`), `category_id NULL`, `title` (dùng làm alt), `image_desktop_path`, `image_mobile_path`, `link_path` (chỉ đường dẫn nội bộ, bắt đầu bằng `/`), `starts_at`, `ends_at NULL`, `sort_order`, `is_active`, timestamps. Index `(placement, is_active, sort_order)`.
+**banners**: `id`, `placement` (`HOME_HERO` | `MEGA_MENU_PROMO` | `CATEGORY_TOP` | `PROMO_PAGE`), `category_id NULL`, `title` (dùng làm alt), `image_desktop_path`, `image_mobile_path` (đường dẫn bản chuẩn hóa), và hai bộ cột ảnh `image_desktop_*`, `image_mobile_*` gồm `width`, `height`, `bytes`, `variants jsonb`, `blur_data_url` (mục 10.1), `link_path` (chỉ đường dẫn nội bộ, bắt đầu bằng `/`), `starts_at`, `ends_at NULL`, `sort_order`, `is_active`, timestamps. Index `(placement, is_active, sort_order)`.
 
 **collections** (bộ sưu tập/chiến dịch): `id`, `name`, `slug` UNIQUE, `description`, `title_image_path NULL`, `hero_image_desktop_path NULL`, `hero_image_mobile_path NULL`, `starts_at`, `ends_at NULL`, `show_on_home bool`, `show_as_home_tab bool`, `home_sort int`, `card_ribbon_text varchar(40) NULL` (nhãn trên thẻ sản phẩm, ví dụ "Bán chạy"), `is_active`, timestamps.
 
 **collection_products**: `collection_id` FK, `product_id` FK, `sort_order`. PK `(collection_id, product_id)`.
 
 Chỉ hiển thị banner/bộ sưu tập đang hiệu lực theo giờ server; sản phẩm ẩn hoặc hết hàng xếp cuối bộ sưu tập.
+
+### 10.1 Cột ảnh dùng chung
+
+`product_images`, `categories`, `banners` (mỗi ảnh desktop/mobile một bộ) và các ảnh của `collections` (`title_image_path`, `hero_image_*`) cùng một quy ước. Admin chỉ tải ảnh gốc; server chuẩn hóa và tạo sẵn các bản nhỏ (ARCHITECTURE mục 15).
+
+| Cột | Ý nghĩa |
+|---|---|
+| `*_path` / `storage_path` | Đường dẫn bản chuẩn hóa (tối đa 2400px, đã xóa EXIF/GPS) trong bucket riêng tư, dùng để tạo lại các bản nhỏ khi đổi preset |
+| `width`, `height` | Kích thước bản chuẩn hóa, để giao diện đặt sẵn khung và tránh giật bố cục |
+| `bytes` | Dung lượng bản chuẩn hóa |
+| `variants jsonb` | Các bản WebP đã tạo trong bucket công khai: `{ "<preset>": { "<chiều rộng>": "<đường dẫn>" } }`, ví dụ `{"product-card":{"320":"…","480":"…"}}` |
+| `blur_data_url` | Ảnh mờ 16–24px mã hóa base64 (`data:image/webp;base64,…`, giới hạn ≈ 2 KB) làm placeholder khi tải |
+
+Ảnh chưa xử lý xong thì `variants` rỗng và giao diện hiện ảnh giữ chỗ. Không có `variants` thì ảnh không được công khai.
 
 ## 11. Dữ liệu seed
 

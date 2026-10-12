@@ -15,7 +15,7 @@
 | Ứng dụng web | Vercel, gói Pro | Gói Hobby không dùng cho mục đích thương mại. Tự lo TLS, CDN, vá hệ điều hành. |
 | Database | Supabase Postgres, gói Pro, region Singapore (ap-southeast-1) | Gói Free bị tạm dừng khi không hoạt động và không có backup tự động. |
 | Đăng nhập | Supabase Auth | Đã có sẵn: băm mật khẩu, phiên, OTP qua SMS, TOTP MFA, CAPTCHA, rate limit. |
-| Ảnh sản phẩm | Supabase Storage (bucket public-read, upload bằng signed URL) | Bớt được một nhà cung cấp so với Cloudinary. |
+| Ảnh | Supabase Storage: bucket riêng tư `incoming` (upload bằng signed URL), bucket riêng tư `normalized` (bản chuẩn hóa), bucket công khai `media` (các bản WebP đã nén) | Bớt được một nhà cung cấp so với Cloudinary. Xử lý bằng `sharp` (cần duyệt dependency), xem mục 15. |
 | Thanh toán | SePay (webhook HMAC + API đối soát v2) | |
 | SMS OTP | Nhà cung cấp trong nước (eSMS, SpeedSMS hoặc Zalo ZNS) qua Supabase Send SMS Hook | Cần đăng ký brandname; chủ dự án chọn nhà cung cấp. |
 | CAPTCHA | Cloudflare Turnstile | Supabase Auth hỗ trợ sẵn. |
@@ -82,6 +82,7 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │   ├── db-set-local-password.mts    # đặt mật khẩu app_runtime ở local (chỉ APP_ENV=local)
 │   ├── create-admin.ts              # tạo admin đầu tiên (chạy tay, hỏi mật khẩu qua prompt)
 │   ├── seed-local.ts                # dữ liệu mẫu, từ chối chạy khi APP_ENV=production
+│   ├── reprocess-images.ts          # pnpm images:reprocess: tạo lại mọi bản ảnh từ ảnh chuẩn hóa
 │   └── import-admin-units.ts        # nạp danh mục 34 tỉnh/thành + phường/xã
 ├── src/
 │   ├── proxy.ts
@@ -110,7 +111,7 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │   │       ├── orders/[id]/status/route.ts
 │   │       └── cron/[job]/route.ts              # expire-orders, reconcile-payments, retry-bank-tx, cleanup
 │   ├── components/
-│   │   ├── ui/                                  # Button, Input, Modal, Badge... (thuần hiển thị)
+│   │   ├── ui/                                  # Button, Input, Modal, Badge... (thuần hiển thị); AppImage (ảnh theo preset)
 │   │   ├── shop/                                # ProductCard, CartDrawer, Header... (port từ code cũ)
 │   │   └── admin/
 │   ├── stores/                                  # Zustand, chỉ trạng thái UI
@@ -118,6 +119,7 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │   │   └── ui.ts
 │   ├── lib/                                     # hàm thuần dùng chung client/server
 │   │   ├── format.ts  slugify.ts  geo.ts  phone.ts
+│   │   └── images/ presets.ts  loader.ts        # định nghĩa preset (chiều rộng, tỉ lệ, sizes) + custom loader cho next/image
 │   └── server/                                  # mọi file: import "server-only"
 │       ├── env.ts                               # Zod parse biến môi trường, fail-fast
 │       ├── db/ client.ts  schema/*.ts  tx.ts
@@ -134,7 +136,9 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │           ├── catalog/  pricing/  inventory/  fulfillment/
 │           ├── checkout/  orders/  payments/  handover/  refunds/
 │           ├── loyalty/  customers/  staff/  settings/
-│           ├── reports/  analytics/  audit/  notifications/
+│           ├── reports/  analytics/  audit/  notifications/  media/
+│           │   (fulfillment/ gồm strategy.ts và shipping/: port.ts  free.policy.ts  index.ts, xem mục 14;
+│           │    media/ gồm service xử lý ảnh, xem mục 15)
 │           └── (mỗi module: service.ts, repo.ts, schemas.ts, *.test.ts)
 └── tests/
     ├── integration/   # chạy với Postgres local (supabase start)
@@ -244,7 +248,7 @@ Quy tắc:
 - Adapter chưa làm xong phải `throw new NotImplementedError()`, không bao giờ trả `success: true` giả.
 - Không có "tự động chuyển về mock khi thiếu key". Thiếu key ở production thì ứng dụng không khởi động.
 
-Các port: `PaymentProviderPort` (verifyWebhook, parseWebhook, listTransactions), `SmsPort` (sendOtp, sendMessage), `StoragePort` (createSignedUpload, getPublicUrl, delete), `CaptchaPort` (verify), `NotifierPort` (notifyOwner), `AuthPort` (bọc Supabase Auth).
+Các port: `PaymentProviderPort` (verifyWebhook, parseWebhook, listTransactions), `SmsPort` (sendOtp, sendMessage), `StoragePort` (createSignedUpload cho bucket `incoming`, download, putPrivate, putPublic, getPublicUrl, delete), `CaptchaPort` (verify), `NotifierPort` (notifyOwner), `AuthPort` (bọc Supabase Auth).
 
 ## 10. Môi trường và biến môi trường
 
@@ -278,7 +282,7 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
 - Trang public (trang chủ, danh mục, sản phẩm) là Server Component, có `generateMetadata`, `sitemap.ts`, `robots.ts`, JSON-LD `Product`.
 - CSP dùng nonce nên MỌI trang render động: root layout gọi `await connection()` để Next.js gắn nonce lúc render theo request (trang tĩnh dựng lúc build không có nonce, script của chính Next.js sẽ bị chặn). Hệ quả: HTML có `Cache-Control: private, no-cache, no-store`, CDN không cache HTML, mỗi lượt xem tốn một lần render; file `/_next/static` vẫn cache vĩnh viễn. Bù bằng cache dữ liệu (`unstable_cache` hoặc tương đương, có tag để invalidate khi admin sửa sản phẩm) để giảm tải database.
 - Next.js 16 đổi tên convention `middleware` thành `proxy` (bản cũ deprecated). Dự án dùng `src/proxy.ts`, export hàm `proxy`, chạy trên Node.js runtime (xem N26).
-- Ảnh qua `next/image`, `remotePatterns` chỉ cho phép domain Supabase Storage của dự án.
+- Ảnh nội dung qua component `AppImage` (bọc `next/image`) với custom loader trả bản WebP đã tạo sẵn gần nhất, không dùng bộ tối ưu ảnh của Next.js/Vercel (mục 15). `remotePatterns` vẫn chỉ cho phép domain Supabase Storage của dự án như lớp phòng thủ thứ hai.
 - Tìm kiếm: Postgres full-text + `unaccent` + `pg_trgm` để gõ không dấu vẫn ra ("banh mi" → "Bánh mì").
 - Viewport cho phép phóng to (không đặt `maximumScale`, `userScalable`).
 - Giỏ hàng lưu ở client (chỉ `sellUnitId` + `qty`). Giá hiển thị trong giỏ lấy từ `quoteCart()` phía server.
@@ -298,3 +302,94 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
   - Sau này: `NearestWarehouseWithFullStockStrategy`: lọc các kho còn ĐỦ toàn bộ hàng của đơn, trong bán kính giao của kho đó, chọn kho gần nhất.
 - Không bao giờ tách một đơn ra nhiều kho (quyết định D4).
 - Khi mở thêm kho: thêm UI quản lý kho, phân quyền nhân viên theo kho (`staff_members.warehouse_id`), báo cáo theo kho.
+
+## 14. Phí giao hàng (`ShippingFeePolicy`)
+
+Phí giao hàng tách thành module riêng `src/server/modules/fulfillment/shipping/`, để đổi cách tính phí sau này không phải sửa `placeOrder`.
+
+```
+shipping/
+  port.ts          # interface ShippingFeePolicy, ShippingQuoteInput, ShippingQuote
+  free.policy.ts   # FreeShippingPolicy: luôn fee = 0
+  index.ts         # chọn chính sách theo store_settings.shipping_policy
+  *.test.ts
+```
+
+```ts
+interface ShippingFeePolicy {
+  quote(input: {
+    deliveryType: "DELIVERY" | "PICKUP";
+    subtotal: number;      // VND nguyên
+    distanceKm?: number;   // chỉ có với DELIVERY
+    provinceCode: string;  // với PICKUP: của kho
+    wardCode: string;      // với PICKUP: của kho
+    warehouseId: string;
+    now: Date;             // lấy từ clock.ts
+  }): { fee: number; policy: string; breakdown: Record<string, unknown> }; // fee là số nguyên >= 0
+}
+```
+
+| Mã chính sách | Trạng thái | Ghi chú |
+|---|---|---|
+| `FREE` | Đã hiện thực, mặc định | `fee = 0` cho cả `DELIVERY` lẫn `PICKUP`, `breakdown = {"rule":"FREE"}` |
+| `FLAT` | Chưa làm | Dùng `shipping_fee_flat` và `free_shipping_threshold` làm tham số |
+| `BY_DISTANCE` | Chưa làm | Chờ quyết định Q16 |
+| `BY_ZONE` | Chưa làm | Chờ quyết định Q16 |
+
+Quy tắc:
+- Chọn chính sách chưa hiện thực thì `index.ts` ném `NotImplementedError`. Không có đường tự rơi về 0 hay mức phí mặc định.
+- Lưu `store_settings.shipping_policy` bằng chính sách chưa hiện thực bị từ chối ở service. Khi khởi động, server kiểm giá trị đang lưu; chưa hiện thực thì từ chối khởi động (hook khởi động của Next.js, ví dụ `instrumentation.ts`; chốt cách làm ở T3.2). Đổi chính sách cần MFA step-up và ghi audit.
+- Hàm `quote` thuần (không đọc database); người gọi truyền đủ dữ liệu. Có unit test cho từng chính sách.
+- Kết quả được chốt vào `orders.shipping_fee`, `shipping_policy`, `shipping_breakdown` lúc đặt; đổi chính sách không tính lại đơn đã đặt.
+- Kiểm tra bán kính giao (`delivery_radius_km`, mặc định 40) nằm ở `fulfillment/strategy.ts`, độc lập với chính sách phí.
+
+## 15. Xử lý ảnh tự động
+
+Admin chỉ tải ảnh gốc. Việc nén, đổi kích thước và tạo các bản theo kích thước hiển thị do server làm, không có bước nén thủ công.
+
+**Giới hạn ảnh gốc**: JPEG, PNG, WebP; tối đa 12 MB; tối đa 40 megapixel.
+
+**Bucket Supabase Storage** (tên đề xuất):
+
+| Bucket | Quyền | Nội dung |
+|---|---|---|
+| `incoming` | riêng tư | ảnh gốc vừa tải lên, xóa sau khi xử lý (cron `cleanup` xóa file mồ côi quá 24 giờ) |
+| `normalized` | riêng tư | bản chuẩn hóa (tối đa 2400px, đã xóa metadata), dùng để tạo lại các bản nhỏ |
+| `media` | công khai | các bản WebP theo preset, đặt tên theo `image id` và bản sửa đổi để cache vĩnh viễn |
+
+**Luồng**:
+1. Admin chọn ảnh; server cấp signed upload URL của bucket `incoming` (chỉ staff/admin, có rate limit). Trình duyệt tải thẳng lên Supabase, vì request qua hàm serverless bị giới hạn dung lượng body. Bucket giới hạn MIME và 12 MB.
+2. Trình duyệt gọi route xử lý (chỉ staff/admin, rate limit, kiểm Origin). Route tải ảnh từ `incoming` về.
+3. Kiểm tra: loại ảnh xác định bằng nội dung thật (không tin đuôi file hay Content-Type); từ chối SVG, ảnh động, ảnh quá lớn (dung lượng hoặc megapixel).
+4. `sharp` với `limitInputPixels` đặt theo 40 megapixel; tự xoay theo EXIF rồi xóa toàn bộ metadata (EXIF, GPS).
+5. Lưu bản chuẩn hóa (tối đa 2400px) vào `normalized`.
+6. Tạo các bản WebP theo preset (bảng dưới), chất lượng khoảng 80, ghi vào `media`; tạo `blur_data_url` (ảnh mờ 16–24px base64).
+7. Ghi `width`, `height`, `bytes`, `variants`, `blur_data_url` vào database (DATA_MODEL mục 10.1) và xóa file trong `incoming`. Lỗi giữa chừng thì dọn các file đã ghi, không để bản ghi trỏ vào file thiếu.
+
+**Preset**:
+
+| Preset | Chiều rộng (px) | Dạng | Dùng ở |
+|---|---|---|---|
+| `product-thumb` | 160 | vuông, `contain`, nền trắng | ảnh nhỏ trong giỏ, danh sách đơn, bảng admin |
+| `product-card` | 320, 480 | vuông, `contain`, nền trắng | thẻ sản phẩm (UI_SPEC 4.4) |
+| `product-detail` | 800, 1200 | vuông, `contain`, nền trắng | gallery trang sản phẩm, lightbox |
+| `banner-desktop` | 1560, 1040 | 3,9:1, `cover` | banner desktop |
+| `banner-mobile` | 750, 480 | 16:9, `cover` | banner mobile |
+| `category-icon` | 120, 240 | vuông, `contain`, nền trong | sidebar, mega menu, khối danh mục con |
+
+Ảnh sản phẩm dùng `contain` trên nền trắng nên không bao giờ cắt mất sản phẩm. Ảnh banner dùng `cover`, giao diện admin hiện bản xem trước vùng bị cắt.
+
+**Ngân sách dung lượng** (kiểm bằng test với ảnh mẫu): `product-card` 320px ≤ 40 KB; `product-detail` 800px ≤ 120 KB; `banner-desktop` ≤ 200 KB; `category-icon` ≤ 15 KB. Bản chưa nêu không được lớn hơn bản lớn hơn cùng preset; giá trị cụ thể chốt ở T2.2. Vượt ngân sách thì tự giảm chất lượng theo bậc (80, 72, 64, 56, 48); vẫn vượt ở bậc thấp nhất thì ghi cảnh báo `image.budget_exceeded` và giữ bản bậc thấp nhất.
+
+**Hiển thị**:
+- Component dùng chung `AppImage` nhận `preset` và tự đặt `sizes` khớp UI_SPEC, sinh từ bảng số cột lưới ở UI_SPEC mục 4.4 trong `lib/images/presets.ts` (không viết tay ở từng chỗ dùng).
+- `next/image` với custom loader (`lib/images/loader.ts`) trả bản đã tạo sẵn có chiều rộng gần nhất không nhỏ hơn yêu cầu; không qua bộ tối ưu ảnh của Next.js.
+- Luôn truyền `width`/`height` từ database để không giật bố cục; `placeholder="blur"` với `blur_data_url`.
+- Banner đầu trang chủ `priority`, các ảnh còn lại lazy.
+- ESLint cấm `<img>` trần cho ảnh nội dung.
+
+**Tạo lại**: `pnpm images:reprocess` đọc bản chuẩn hóa, tạo lại mọi bản theo preset hiện hành, cập nhật `variants` rồi xóa bản cũ. Chạy vào database/bucket thật cần cờ xác nhận tường minh.
+
+**Nhập Excel** (T2.6): cột ảnh, nếu có, chỉ nhận tên file nằm trong gói ảnh admin tải lên cùng lần nhập, không bao giờ tải từ URL (tránh SSRF). Mọi ảnh đi qua cùng pipeline và cùng giới hạn.
+
+**Dependency**: `sharp` là dependency mới, phải xin duyệt theo CLAUDE.md khi làm T2.2 (nêu tên, lý do, mức độ bảo trì, phương án thay thế).

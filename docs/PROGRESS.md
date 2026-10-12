@@ -22,7 +22,8 @@ Ngoài roadmap:
 | ---------------------------- | ---------- | --- | --------------------------------------------------- |
 | README bảo mật máy dev       | Đã merge   | #4  | Mục "Bảo mật máy phát triển" trong README           |
 | Sửa lỗi xuống dòng (LF)      | Đã merge   | #5  | `.gitattributes`, `.editorconfig`, Prettier `endOfLine: "lf"`; `pnpm format:check` xanh trên Windows |
-| T0.5b: proxy và agent rules  | Chờ merge  | #9    | `src/proxy.ts`, `agentRules: false`; xem "Quyết định đã chốt (T0.5b)" |
+| T0.5b: proxy và agent rules  | Đã merge   | #9    | `src/proxy.ts`, `agentRules: false`; xem "Quyết định đã chốt (T0.5b)" |
+| Docs: yêu cầu bổ sung (phí giao, trả trước, ảnh) | Chờ merge | #10   | Chỉ sửa tài liệu; xem "Quyết định đã chốt (yêu cầu bổ sung, 12/10/2026)" |
 
 ## Quyết định đã chốt (T0.3)
 
@@ -52,10 +53,22 @@ Ngoài roadmap:
 - `src/middleware.ts` → `src/proxy.ts`, hàm `middleware` → `proxy`, test đổi theo (N26). `pnpm build` không còn cảnh báo deprecated.
 - `agentRules: false` trong `next.config.ts` để `next dev` không ghi vào `CLAUDE.md` (N27).
 
+## Quyết định đã chốt (yêu cầu bổ sung, 12/10/2026)
+
+- Phí giao hàng giai đoạn đầu MIỄN PHÍ cho cả giao tận nơi lẫn nhận tại cửa hàng; bán kính 40km vẫn kiểm (N28). Tách module `fulfillment/shipping/` với `ShippingFeePolicy`; chỉ làm `FreeShippingPolicy`. `store_settings.shipping_policy` mặc định `FREE`; `orders` lưu `shipping_policy`, `shipping_breakdown`. `shipping_fee_flat` và `free_shipping_threshold` chỉ là tham số dự phòng của `FLAT`. Câu hỏi mở Q16: tính lại theo km hay theo khu vực.
+- Thanh toán trước 100%, không COD, không thu tiền mặt, staff không xác nhận thu tiền (N29): thành quy tắc BUSINESS_RULES 5.0 và bất biến 19 trong CLAUDE.md; thêm `CHECK` `paid_at` ở `orders`.
+- Ảnh: admin chỉ tải ảnh gốc (≤ 12 MB, ≤ 40 megapixel); server tự chuẩn hóa và tạo các bản WebP theo preset, hiển thị bằng `AppImage` + custom loader (N30, ARCHITECTURE mục 15). `sharp` là dependency mới, phải xin duyệt ở T2.2.
+- Đợt này chỉ sửa tài liệu, chưa có thay đổi code.
+
 ## Việc treo
 
-- T0.7 (CI): chạy `pnpm build` rồi `pnpm test:http` sau bước build.
-- `Referrer-Policy: no-referrer` cho trang có token trên URL: làm cùng trang đơn hàng.
+- T0.7 (CI): PHẢI chạy `pnpm test:http` sau bước `pnpm build` (test khởi động `next start` thật). Đã ghi vào ROADMAP T0.7.
+- `Referrer-Policy: no-referrer` cho trang có token trên URL: làm ở T3.5 cùng trang đơn hàng.
+- Chưa thử CSP với dịch vụ thật (Supabase, Sentry, Turnstile): mới có test trên server `next start` với giá trị giả. Phải thử trên staging trước khi mở bán (SECURITY mục 5).
+- T2.2: xin duyệt dependency `sharp` trước khi cài; chốt định dạng bản chuẩn hóa (đề xuất WebP chất lượng cao, giữ kênh alpha) và các giá trị ngân sách của bản chưa nêu.
+- T2.9: chốt preset cho banner mega menu (2,2:1) và ảnh tiêu đề khối (7:1); chưa có trong danh sách preset.
+- T3.2: chốt cách kiểm "từ chối khởi động" khi `shipping_policy` chưa hiện thực (hook khởi động của Next.js hay kiểm lúc nạp cấu hình).
+- Câu hỏi mở Q16: phí giao hàng sau này tính theo km hay theo khu vực (`docs/README.md`).
 - Thêm Supabase vào `connect-src` khi làm upload ảnh bằng signed URL; thêm domain tile OSM vào `img-src` ở T1.4.
 - Test header trên trang admin: thêm khi có `/admin/dang-nhap` (T1.5).
 - `/_next/static` và `favicon.ico` không đi qua proxy nên không có `X-Content-Type-Options`; nếu cần phủ cả file tĩnh thì thêm `headers()` trong `next.config.ts`.

@@ -10,7 +10,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 - Đọc thêm tài liệu liên quan tới task:
   - `docs/ARCHITECTURE.md`: kiến trúc, cấu trúc thư mục, hạ tầng, biến môi trường
   - `docs/DATA_MODEL.md`: bảng, ràng buộc, index, quyền database
-  - `docs/BUSINESS_RULES.md`: giá, phí ship, điểm, trạng thái đơn, khớp thanh toán, bàn giao
+  - `docs/BUSINESS_RULES.md`: giá, phí giao hàng, điểm, trạng thái đơn, khớp thanh toán, bàn giao
   - `docs/SECURITY.md`: mô hình đe dọa, kiểm soát bảo mật, checklist
   - `docs/UI_SPEC.md`: design tokens, bố cục từng trang (desktop + mobile), component, PWA
   - `docs/reference/kfm-desktop/`: ảnh tham chiếu bố cục desktop (1 px ảnh ≈ 1 CSS px). Không commit, không dùng ảnh này trong sản phẩm.
@@ -24,7 +24,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 - Zod: kiểm tra mọi dữ liệu đầu vào ở biên server
 - PostgreSQL trên Supabase, truy cập bằng Drizzle ORM + postgres-js, chỉ từ server
 - Supabase Auth (khách: SĐT + mật khẩu; nhân viên: username + mật khẩu; admin bắt buộc TOTP MFA)
-- Supabase Storage cho ảnh sản phẩm
+- Supabase Storage cho ảnh (bucket `incoming` riêng tư → bản chuẩn hóa riêng tư → bản WebP công khai); `sharp` xử lý ảnh là dependency mới, phải xin duyệt khi làm T2.2
 - SePay (webhook HMAC-SHA256 + API đối soát), VietQR tạo tại server
 - Vitest (unit + integration với Postgres thật), Playwright (E2E), Sentry
 - Deploy: Vercel (Pro), Supabase (Pro, region Singapore)
@@ -39,6 +39,7 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 - `pnpm test:http`: test header bảo mật bằng cách gọi HTTP vào server `next start` thật (cần `pnpm build` trước, không nằm trong `pnpm check`)
 - `pnpm test:e2e`: Playwright
 - `pnpm db:generate` / `pnpm db:migrate`: tạo và áp dụng migration Drizzle
+- `pnpm images:reprocess`: tạo lại mọi bản ảnh từ ảnh chuẩn hóa khi đổi preset (có từ T2.2)
 - `pnpm db:seed:local`: dữ liệu mẫu CHỈ cho local (script trong `scripts/`, từ chối chạy nếu `APP_ENV=production`)
 
 ## Bất biến bảo mật (KHÔNG BAO GIỜ vi phạm)
@@ -57,22 +58,24 @@ Website bán tạp hóa online. Khách thanh toán 100% bằng chuyển khoản 
 9. Xem đơn hàng chỉ bằng phiên của chủ đơn hoặc view token ngẫu nhiên. Không bao giờ dùng mã đơn, SĐT hay ID đoán được làm quyền truy cập.
 10. Hoàn tất bàn giao cần token/PIN bí mật từ khách. Giao diện nhân viên không bao giờ hiển thị token/PIN bàn giao.
 11. Mọi thao tác ghi của admin/staff và mọi sự kiện bảo mật đều ghi `audit_logs` (bảng chỉ INSERT).
-12. Không dùng `dangerouslySetInnerHTML` (ngoại lệ: JSON-LD qua hàm serialize an toàn đã có test). Không cho upload SVG.
+12. Không dùng `dangerouslySetInnerHTML` (ngoại lệ: JSON-LD qua hàm serialize an toàn đã có test). Không cho upload SVG. Ảnh admin tải lên chỉ được phục vụ sau khi qua pipeline xử lý ảnh (kiểm loại bằng nội dung thật, xóa EXIF).
 13. Truy vấn database chỉ qua Drizzle trong `repo.ts`. Không nối chuỗi SQL. SQL thô (template `` sql`...` `` của Drizzle) chỉ dùng với tham số, không nối chuỗi.
 14. Log không chứa mật khẩu, token, OTP, secret; SĐT phải che (`090****567`); không log nguyên body webhook ra console.
 15. Số tài khoản nhận tiền chỉ lấy từ biến môi trường server, không cho sửa qua giao diện admin.
 16. Rate limit cho: đăng nhập, gửi OTP, checkout, tra trạng thái đơn, nhập PIN bàn giao, webhook (mức nới lỏng).
 17. So sánh chữ ký, token, PIN bằng `crypto.timingSafeEqual` (qua helper `safeEqual`). Token sinh bằng `crypto.randomBytes`/`randomInt`, không dùng `Math.random`.
 18. Không đọc, không in, không sao chép nội dung bất kỳ file `.env*` nào, kể cả trong `../tuongvi-legacy`. Chỉ được kiểm tra xem file có tồn tại hay không.
+19. Thanh toán trước 100%: mọi đơn, kể cả nhận tại cửa hàng, phải chuyển khoản xong (`PAID`) mới được xử lý. Không có COD, không trả tiền khi nhận, không thu tiền mặt tại quầy. Nhân viên không có chức năng xác nhận đã thu tiền. Máy trạng thái không có đường từ `PENDING_PAYMENT` tới `PACKING`, `READY_*`, `OUT_FOR_DELIVERY` hay `COMPLETED` (BUSINESS_RULES mục 5.0).
 
 ## Quy ước code
 
 - Phân lớp bắt buộc: `app/` (UI, action) → `server/modules/*/service.ts` (nghiệp vụ) → `repo.ts` (database).
   UI không import repo. Service không import từ `app/`.
-- Logic tính tiền, điểm, phí ship, chọn kho, máy trạng thái viết thành hàm thuần (pure function) và có unit test.
+- Logic tính tiền, điểm, phí giao hàng, chọn kho, máy trạng thái viết thành hàm thuần (pure function) và có unit test.
 - Lỗi nghiệp vụ dùng `AppError(code, httpStatus)`; thông điệp tiếng Việt cho người dùng lấy từ bảng `errors.ts`, không lộ chi tiết nội bộ.
 - Thời gian lưu `timestamptz` (UTC), hiển thị theo `Asia/Ho_Chi_Minh`. Dùng `server/lib/clock.ts` để test được.
 - Server Component là mặc định. Chỉ thêm `"use client"` khi cần tương tác.
+- Ảnh nội dung (sản phẩm, banner, danh mục) luôn qua component dùng chung với `preset`; không dùng `<img>` trần (ESLint cấm). Phí giao hàng luôn qua `ShippingFeePolicy`, không tính tay ở chỗ khác.
 - Giao diện: một codebase responsive, mobile-first, theo `docs/UI_SPEC.md`. Không tạo bản mobile/desktop riêng, không phân nhánh theo user-agent. Không dùng logo, ảnh, màu nhận diện hay câu chữ của thương hiệu khác.
 - Tên route tiếng Việt không dấu (`/san-pham/[slug]`); tên biến, hàm, commit bằng tiếng Anh; chữ trên giao diện bằng tiếng Việt.
 - Không dùng `any`. Không tắt rule ESLint trừ khi có comment giải thích.

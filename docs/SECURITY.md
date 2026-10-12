@@ -12,7 +12,7 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
 | T4 | Bán quá tồn | Hai khách cùng mua món cuối | Giữ kho bằng UPDATE có điều kiện trong transaction | 2 checkout song song cho 1 món còn lại → đúng 1 thành công |
 | T5 | Tiêu điểm hai lần | Hai đơn song song dùng cùng số điểm | `SELECT ... FOR UPDATE` khách + `points_held` + CHECK ≥ 0 | 2 đơn song song dùng toàn bộ điểm → 1 thành công |
 | T6 | Xem đơn người khác (IDOR) | Đoán ID/mã đơn | Chỉ chủ phiên hoặc view token 256-bit; mã đơn không phải quyền | Truy cập đơn không có quyền → 404 (không phải 403, tránh lộ sự tồn tại) |
-| T7 | Nhận hàng không trả tiền / nhân viên gian lận bàn giao | Đưa QR của đơn chưa trả; nhân viên tự đánh dấu đã giao | Token/PIN chỉ sinh sau PAID, chỉ khách xem được; COMPLETED chỉ qua xác thực bàn giao; khóa sau 5 lần sai | Đơn PENDING không có mã bàn giao; staff không có API xem mã; PIN sai 5 lần → khóa |
+| T7 | Nhận hàng không trả tiền / nhân viên gian lận bàn giao | Đưa QR của đơn chưa trả; nhân viên tự đánh dấu đã giao | Token/PIN chỉ sinh sau PAID, chỉ khách xem được; COMPLETED chỉ qua xác thực bàn giao; khóa sau 5 lần sai; thanh toán trước 100% (không COD, không thu tiền mặt, staff không có chức năng xác nhận thu tiền, máy trạng thái không có đường từ PENDING_PAYMENT tới PACKING/READY_*/OUT_FOR_DELIVERY/COMPLETED, `CHECK` `paid_at` ở database) | Đơn PENDING không có mã bàn giao; staff không có API xem mã; PIN sai 5 lần → khóa; mọi cặp chuyển từ PENDING_PAYMENT sang trạng thái khác PAID/EXPIRED/CANCELLED bị từ chối (cả đơn PICKUP); UPDATE thẳng sang PACKING khi `paid_at` null bị database từ chối |
 | T8 | Chiếm tài khoản | Dò mật khẩu, credential stuffing | Supabase Auth + rate limit + Turnstile + chặn mật khẩu lộ; MFA cho admin | Vượt ngưỡng → yêu cầu CAPTCHA / tạm khóa |
 | T9 | Đốt tiền SMS (SMS pumping) | Bot gọi gửi OTP hàng loạt | Turnstile, giới hạn theo SĐT/IP/ngày, chỉ đầu số di động VN, trần gửi toàn hệ thống mỗi ngày + cảnh báo | Vượt giới hạn → từ chối, không gọi nhà cung cấp SMS |
 | T10 | Chiếm tài khoản admin | Lộ mật khẩu admin | TOTP MFA bắt buộc, step-up cho thao tác nhạy cảm, audit, báo cáo hằng ngày gửi chủ shop | Admin chưa MFA không vào được trang quản trị |
@@ -24,7 +24,7 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
 | T16 | Lộ database | Gọi Supabase Data API bằng anon key | Schema `app` không expose, `anon` không có USAGE, RLS bật | Test tích hợp: role `anon` không đọc được bảng nào |
 | T17 | Lộ secret | Secret trong bundle client, trong git, trong log | `server-only`, không `NEXT_PUBLIC_` cho secret, gitleaks trong CI, logger lọc | CI fail nếu gitleaks phát hiện |
 | T18 | Lỗ hổng thư viện | Gói npm có CVE | Lockfile, `pnpm audit` trong CI, Dependabot/Renovate, hạn chế số dependency | CI fail với lỗ hổng high/critical |
-| T19 | Lạm dụng upload | Upload file độc, file lớn | Signed upload URL do admin xin; bucket giới hạn MIME + dung lượng; không SVG | Upload sai loại/quá cỡ → từ chối |
+| T19 | Lạm dụng upload | Upload file độc, file lớn | Signed upload URL do admin xin, chỉ vào bucket riêng tư `incoming` (giới hạn MIME + 12 MB); route xử lý chỉ cho staff/admin, có rate limit, kiểm loại bằng nội dung thật, `limitInputPixels`, xóa EXIF/GPS; không SVG, không ảnh động; chỉ bản đã xử lý mới vào bucket công khai | Upload sai loại, quá 12 MB, quá 40 megapixel, SVG đổi đuôi `.jpg`, ảnh động → từ chối; ảnh ra không còn EXIF/GPS |
 | T20 | Cài nhầm mock ở production | Quên cấu hình, dùng adapter giả | `env.ts` fail-fast; adapter chưa xong phải throw | Test `env.ts` với cấu hình production chứa mock → lỗi |
 | T21 | Mất dữ liệu | Xóa nhầm, sự cố nhà cung cấp | Backup hằng ngày + dump hằng tuần ở nơi khác + diễn tập khôi phục hằng tháng; xóa mềm | Biên bản diễn tập khôi phục |
 | T22 | Nội gián đọc dữ liệu khách | Nhân viên xuất danh sách khách | Staff chỉ thấy thông tin đơn đang xử lý; xuất CSV chỉ admin, có audit | Staff gọi API danh sách khách → 403 |
@@ -55,14 +55,21 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
   - `script-src` ở staging và production KHÔNG có `'unsafe-eval'` và `'unsafe-inline'`. `style-src` giữ `'unsafe-inline'` vì thuộc tính `style` của React/Tailwind; đây là ngoại lệ có chủ đích, chỉ cho style.
   - `'unsafe-eval'` chỉ được thêm khi `APP_ENV=local` và `NODE_ENV=development` (`next dev`; công cụ debug của React cần), qua hàm riêng `relaxCspForDevelopment`. Bản build production chạy với `APP_ENV=local` cũng không bị nới.
   - `upgrade-insecure-requests` chỉ gửi ở staging/production để bản local chạy `http://localhost` không bị ép lên https.
-  - Thêm dịch vụ mới thì sửa `headers.ts` và test "khớp đúng bản đã duyệt"; mọi thay đổi CSP phải ghi lý do ở "Nhật ký quyết định" (`docs/README.md`). Việc đã biết trước: tile bản đồ OSM vào `img-src` (T1.4); upload ảnh bằng signed URL cần thêm Supabase vào `connect-src` (giai đoạn quản lý sản phẩm).
+  - Thêm dịch vụ mới thì sửa `headers.ts` và test "khớp đúng bản đã duyệt"; mọi thay đổi CSP phải ghi lý do ở "Nhật ký quyết định" (`docs/README.md`). Việc đã biết trước: tile bản đồ OSM vào `img-src` (T1.4); upload ảnh bằng signed URL cần thêm Supabase vào `connect-src` (T2.2). Chưa thử CSP với dịch vụ thật (Supabase, Sentry, Turnstile); phải thử trên staging trước khi mở bán (checklist mục 5).
 - `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`, chỉ gửi khi `APP_ENV` là `staging` hoặc `production`. Không gửi ở local/test vì trình duyệt sẽ nhớ "chỉ dùng https" cho `localhost` tới 2 năm. Chỉ nộp domain lên danh sách preload (hstspreload.org) khi chắc chắn mọi subdomain đều chạy https.
 - `X-Content-Type-Options: nosniff`
-- `Referrer-Policy: strict-origin-when-cross-origin` (trang có token trên URL: `no-referrer`; các trang đó chưa có, làm cùng trang đơn hàng)
+- `Referrer-Policy: strict-origin-when-cross-origin` (trang có token trên URL: `no-referrer`; các trang đó chưa có, làm ở T3.5 cùng trang đơn hàng)
 - `Permissions-Policy: camera=(self), geolocation=(self), microphone=(), payment=()`
 - Tắt header `X-Powered-By` (`poweredByHeader: false`).
 - Phạm vi: proxy bỏ qua `/_next/static`, `/_next/image`, `favicon.ico` và request prefetch (theo hướng dẫn CSP của Next.js), nên các file tĩnh đó không có header ở trên. Tài liệu HTML, trang 404 và route API đều có.
 - Test: `src/server/security/headers.test.ts` (hàm thuần), `src/proxy.test.ts` (nối env), `pnpm test:http` (server build thật).
+
+### Upload ảnh
+- Chi tiết luồng ở ARCHITECTURE mục 15. Admin chỉ tải ảnh gốc (JPEG, PNG, WebP; ≤ 12 MB; ≤ 40 megapixel) vào bucket riêng tư `incoming` bằng signed upload URL.
+- Route xử lý chỉ cho staff/admin, có rate limit và kiểm Origin. Loại ảnh xác định bằng nội dung thật, không tin đuôi file hay `Content-Type`. Từ chối SVG, ảnh động, ảnh quá lớn.
+- `sharp` luôn đặt `limitInputPixels` (chống ảnh nén cực lớn làm cạn bộ nhớ), tự xoay theo EXIF rồi xóa toàn bộ metadata, gồm EXIF và GPS.
+- Nội dung do người dùng tải lên không bao giờ được phục vụ trực tiếp: chỉ các bản WebP do server tạo mới nằm ở bucket công khai.
+- Nhập Excel có cột ảnh chỉ nhận tên file trong gói ảnh tải lên, không tải từ URL (chống SSRF).
 
 ### Secret
 - Lưu trong Vercel Environment Variables, tách biệt Preview/Production. Không bao giờ commit `.env*` (chỉ commit `.env.example` không có giá trị).
@@ -116,6 +123,8 @@ Mỗi dòng "Test bắt buộc" ở bảng mục 1 phải có test tự động 
 - [ ] QR đã quét thử bằng ít nhất 2 app ngân hàng; số tài khoản và tên hiển thị đúng
 - [ ] Admin đã bật MFA; không còn tài khoản thử nghiệm nào
 - [ ] Headers bảo mật đạt (kiểm bằng công cụ như securityheaders.com)
+- [ ] CSP đã thử trên staging với dịch vụ thật (Supabase Storage/Auth, Sentry, Turnstile), console không có vi phạm CSP
+- [ ] Không có đường COD hay thu tiền mặt: test máy trạng thái xanh; staff không có chức năng xác nhận đã thu tiền
 - [ ] Schema `app` không truy cập được bằng anon key (thử bằng curl tới Data API)
 - [ ] Backup hoạt động; đã diễn tập khôi phục 1 lần
 - [ ] Sentry, cảnh báo cho chủ shop, uptime monitor đã chạy

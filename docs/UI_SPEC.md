@@ -378,7 +378,7 @@ Bố cục 2 cột trong vùng nội dung: **trái co giãn**, **phải cố đ�
 4. **Nút chính**:
    - Cao 44, rộng 100%, bo tròn, nền `primary`, chữ trắng 17/600: "Thêm vào giỏ · 17.000đ" (giá theo quy cách đang chọn), cách trên 12.
    - Đã có trong giỏ: nút chia đôi, trái là bộ tăng giảm, phải là "Xem giỏ hàng".
-5. **Dòng thông tin**: mỗi dòng cao 46, icon 20 `muted` + chữ 16/400 `text-2` + chevron, kẻ ngăn giữa các dòng. Nội dung: "Miễn phí giao cho đơn từ 300.000đ", "Chính sách đổi trả". Bấm mở dialog nội dung.
+5. **Dòng thông tin**: mỗi dòng cao 46, icon 20 `muted` + chữ 16/400 `text-2` + chevron, kẻ ngăn giữa các dòng. Nội dung: "Miễn phí giao hàng" (chữ lấy theo chính sách phí đang bật, BUSINESS_RULES 4.3), "Chính sách đổi trả". Bấm mở dialog nội dung.
 6. **"Thương hiệu: {TÊN}"** 14/400 + tên 14/700 `primary` (link tới tìm kiếm theo thương hiệu).
 7. Hàng có cồn: dòng cảnh báo "Chỉ bán cho khách từ 18 tuổi" (13/500 `danger`).
 
@@ -393,9 +393,10 @@ Không có sidebar.
 - Thân: nền `page-bg`, padding trên 32, container 1240, 2 cột: **trái co giãn** | **phải 405**, cách 24.
 
 **Cột trái** (các khối trắng bo 8, cách nhau 12):
-1. **Khối ưu đãi giao hàng**:
+1. **Khối ưu đãi giao hàng** (theo chính sách phí đang bật, BUSINESS_RULES 4.3):
    - Cao 56, padding ngang 20.
-   - Chữ 16/500 `sale`: "Mua thêm 55.000đ để được miễn phí giao hàng" + thanh tiến độ mảnh (4px) bên dưới. Đủ điều kiện thì "Đơn hàng được miễn phí giao hàng".
+   - Chính sách `FREE` (giai đoạn đầu): chữ 16/500 `success` "Miễn phí giao hàng", KHÔNG có thanh tiến độ.
+   - Chỉ khi sau này bật chính sách `FLAT` có ngưỡng miễn phí mới hiện dạng chữ 16/500 `sale`: "Mua thêm 55.000đ để được miễn phí giao hàng" + thanh tiến độ mảnh (4px) bên dưới; đủ điều kiện thì "Đơn hàng được miễn phí giao hàng".
 2. **Hàng tổng quát**: "{n} sản phẩm" (16/400) bên trái; "Xóa tất cả" (16/600 `primary`, có xác nhận) bên phải.
 3. **Nhóm "CÒN HÀNG"** (nhãn 13/600 `muted` in hoa, cách 16) rồi danh sách món. Mỗi món padding 16×20, kẻ ngăn giữa các món:
    - ảnh 48×48 viền `border` bo 4,
@@ -409,7 +410,7 @@ Không có sidebar.
 **Cột phải** (dính `top: 86px`): khối trắng bo 8, padding 20.
 - "Tạm tính ({n} món)": 18/600, số món 400.
 - Bên phải: "Tiết kiệm 47K" 13/600 `success`, dưới là tổng 20/700 `sale`.
-- Dòng phí giao dự kiến (14 `muted`).
+- Dòng phí giao (14 `muted`): "Miễn phí giao hàng" khi chính sách là `FREE`; chính sách khác thì hiện phí dự kiến.
 - Nút "Tiến hành đặt hàng" cao 44, rộng 100%, bo tròn, nền `primary`, chữ trắng 16/600, cách 16.
 
 **Ngăn giỏ hàng (drawer)** mở từ header, rộng 420: tiêu đề + danh sách món dạng gọn + khối ưu đãi + tạm tính + 2 nút "Xem giỏ hàng" (viền) và "Đặt hàng" (nền).
@@ -431,10 +432,10 @@ Bố cục như giỏ hàng (không sidebar, nền `page-bg`, 2 cột: trái co 
 3. **Ghi chú cho người giao** (tối đa 300 ký tự).
 4. **Điểm thưởng** (hội viên): công tắc "Dùng điểm", số điểm, số tiền được giảm. Khách vãng lai: "Đăng nhập để tích điểm".
 5. **Sản phẩm** (thu gọn "{n} sản phẩm ▾").
-6. **Thanh toán**: một lựa chọn "Chuyển khoản ngân hàng (VietQR)" + một dòng giải thích xác nhận tự động.
+6. **Thanh toán**: một lựa chọn "Chuyển khoản ngân hàng (VietQR)" + một dòng giải thích xác nhận tự động. Mọi đơn đều chuyển khoản trước, kể cả nhận tại cửa hàng; KHÔNG có lựa chọn COD, trả tiền khi nhận hay tiền mặt tại quầy. Đơn nhận tại cửa hàng thêm dòng "Cửa hàng chuẩn bị hàng sau khi nhận được tiền".
 7. **Xác nhận 18+** nếu có hàng có cồn.
 
-Cột phải: tạm tính, phí giao, giảm từ điểm, tổng (20/700 `sale`), nút "Đặt hàng" (44, `primary`), dòng nhỏ về Điều khoản.
+Cột phải: tạm tính, phí giao (hiện "Miễn phí" khi bằng 0), giảm từ điểm, tổng (20/700 `sale`), nút "Đặt hàng" (44, `primary`), dòng nhỏ về Điều khoản.
 
 Trạng thái:
 - Đang gửi: nút spinner và bị khóa.
@@ -535,6 +536,7 @@ Sản phẩm:
 
 Giỏ hàng, đơn hàng:
 - `CartDrawer`, `CartLine`, `FreeShippingProgress`, `SummaryCard`
+  (`FreeShippingProgress` chỉ render khi chính sách phí là `FLAT` có ngưỡng; với `FREE` thì ẩn thanh tiến độ và hiện chữ "Miễn phí giao hàng")
 - `OrderCard`, `StatusBadge`, `StatusStepper`, `QrPaymentPanel`, `CopyField`
 
 Tài khoản:
@@ -550,15 +552,21 @@ Mỗi component phải có:
 
 ## 6. Hình ảnh
 
-| Loại | Tỉ lệ | Kích thước gợi ý |
-|---|---|---|
-| Ảnh sản phẩm | 1:1 | ≥ 800×800, nền trắng |
-| Banner chính desktop | 3,9:1 | 1560×400 |
-| Banner chính mobile | 16:9 | 750×422 |
-| Banner mega menu | 2,2:1 | 580×264 |
-| Ảnh tiêu đề khối | 7:1 | 980×140 |
-| Icon danh mục (sidebar, danh mục con, mega menu) | 1:1 | 240×240, nền trong |
+Admin chỉ tải ảnh gốc (JPEG, PNG, WebP; ≤ 12 MB; ≤ 40 megapixel); hệ thống tự nén và tạo các bản theo preset (ARCHITECTURE mục 15). Không có bước nén thủ công. Cột "Preset" là tên dùng trong component `AppImage`.
 
+| Loại | Tỉ lệ | Preset (chiều rộng px) | Ghi chú |
+|---|---|---|---|
+| Ảnh sản phẩm: thẻ | 1:1 | `product-card` (320, 480) | nền trắng, `contain` |
+| Ảnh sản phẩm: ảnh nhỏ (giỏ, đơn) | 1:1 | `product-thumb` (160) | |
+| Ảnh sản phẩm: chi tiết, lightbox | 1:1 | `product-detail` (800, 1200) | |
+| Banner chính desktop | 3,9:1 | `banner-desktop` (1560, 1040) | ảnh gốc nên ≥ 1560×400 |
+| Banner chính mobile | 16:9 | `banner-mobile` (750, 480) | ảnh gốc nên ≥ 750×422 |
+| Icon danh mục (sidebar, danh mục con, mega menu) | 1:1 | `category-icon` (120, 240) | nền trong |
+| Banner mega menu | 2,2:1 | chưa có preset | chốt ở T2.9 |
+| Ảnh tiêu đề khối | 7:1 | chưa có preset | chốt ở T2.9 |
+
+- `AppImage` tự đặt `sizes` theo số cột lưới ở mục 4.4 (≥ 1440: 6 cột, 1280–1439: 5, 1024–1279: 5, 768–1023: 4, 600–767: 3, < 600: 2), luôn có `width`/`height` và ảnh mờ làm placeholder. Banner đầu trang chủ tải ưu tiên, các ảnh khác lazy.
+- Ảnh sản phẩm luôn `contain` trên nền trắng để không cắt mất sản phẩm; banner dùng `cover` (admin có bản xem trước vùng bị cắt).
 - Admin upload banner desktop và mobile riêng. Không dùng ảnh lấy từ website khác.
 - Văn phong: tiếng Việt thân thiện, xưng "bạn", nhãn nút là động từ.
 
@@ -590,6 +598,7 @@ Mỗi component phải có:
   - Sai lệch kích thước > 10% so với mục 3–4 phải có lý do.
 - Lighthouse mobile (trang chủ, danh mục, chi tiết): Performance ≥ 80, Accessibility ≥ 90, SEO ≥ 90, Best Practices ≥ 90.
 - CLS < 0,1; LCP < 2,5 giây (4G mô phỏng).
+- Ảnh: mỗi vị trí chỉ tải bản preset đúng cỡ (không tải bản 1200px cho thẻ ~191px); mọi ảnh có `width`/`height`; đạt ngân sách dung lượng ở ARCHITECTURE mục 15.
 - Ảnh so sánh hồi quy ở 390px và 1280px cho các trang chính.
 - Không cuộn ngang ở 360px.
 - Điều hướng bằng bàn phím được: sidebar, mega menu, dropdown tìm kiếm, dialog, carousel.
