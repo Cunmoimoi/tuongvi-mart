@@ -77,6 +77,8 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
 
 ### Log và dữ liệu cá nhân
 - Che SĐT, không log địa chỉ đầy đủ, không log body webhook ra console (body đã lưu có kiểm soát trong `bank_transactions.raw`).
+- Audit log (`audit_logs`, chỉ INSERT): `before`/`after` đi qua cùng hàm làm sạch với logger, nên khóa nhạy cảm (`password`, `token`, `otp`, `secret`, `authorization`, `cookie`, `pin`, `signature`, `apikey`...) bị bỏ hẳn ở mọi tầng và SĐT bị che `090****567`; payload quá 16 KB bị cắt và gắn `_truncated`. `app_runtime` không UPDATE, DELETE, TRUNCATE được; `anon`, `authenticated`, `service_role` không có quyền nào.
+- IP trong audit lấy từ `x-forwarded-for` (địa chỉ đầu tiên) hoặc `x-real-ip`, chỉ nhận địa chỉ hợp lệ theo `net.isIP`, sai thì ghi null. **Các header này client tự gửi được**: chỉ tin khi ứng dụng chạy sau proxy của Vercel (Vercel ghi đè chúng). Chạy ở nơi khác (local, `next start` lộ thẳng ra mạng) thì IP có thể bị giả mạo. Không dùng IP trong audit để phân quyền; rate limit theo IP cũng chỉ đáng tin trên Vercel. `request_id` lấy từ `x-vercel-id` (cùng điều kiện), không có thì sinh mới.
 - Sentry không gửi PII; lọc cookie và header xác thực.
 - Analytics chỉ gắn `customer_id` khi khách đồng ý; banner đồng ý phân tách "cần thiết" và "phân tích".
 - Quyền của khách: xem, sửa thông tin; yêu cầu xóa tài khoản (ẩn danh hóa dữ liệu cá nhân, giữ đơn hàng cho kế toán).

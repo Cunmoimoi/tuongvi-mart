@@ -11,7 +11,7 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.3 | Database và migration nền    | Đã merge   | #3  | Xem "Quyết định đã chốt"                                     |
 | T0.4 | Thư viện lõi phía server     | Đã merge   | #7  | `src/server/lib/*`, migration `0001_rate_limits`; xem "Quyết định đã chốt (T0.4)" |
 | T0.5 | Proxy (middleware) và headers bảo mật | Đã merge   | #8  | `src/proxy.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
-| T0.6 | Audit log                    | Chưa làm   |     |                                                              |
+| T0.6 | Audit log                    | Chờ merge  | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
 | T0.7 | CI                           | Chưa làm   |     | Cần chốt cách đặt mật khẩu `app_runtime` cho CI              |
 | T0.8 | Bộ component giao diện       | Chưa làm   |     |                                                              |
 | T0.9 | Khung adapter (Switchboard)  | Chưa làm   |     |                                                              |
@@ -23,7 +23,7 @@ Ngoài roadmap:
 | README bảo mật máy dev       | Đã merge   | #4  | Mục "Bảo mật máy phát triển" trong README           |
 | Sửa lỗi xuống dòng (LF)      | Đã merge   | #5  | `.gitattributes`, `.editorconfig`, Prettier `endOfLine: "lf"`; `pnpm format:check` xanh trên Windows |
 | T0.5b: proxy và agent rules  | Đã merge   | #9    | `src/proxy.ts`, `agentRules: false`; xem "Quyết định đã chốt (T0.5b)" |
-| Docs: yêu cầu bổ sung (phí giao, trả trước, ảnh) | Chờ merge | #10   | Chỉ sửa tài liệu; xem "Quyết định đã chốt (yêu cầu bổ sung, 12/10/2026)" |
+| Docs: yêu cầu bổ sung (phí giao, trả trước, ảnh) | Đã merge | #10   | Chỉ sửa tài liệu; xem "Quyết định đã chốt (yêu cầu bổ sung, 12/10/2026)" |
 
 ## Quyết định đã chốt (T0.3)
 
@@ -60,7 +60,22 @@ Ngoài roadmap:
 - Ảnh: admin chỉ tải ảnh gốc (≤ 12 MB, ≤ 40 megapixel); server tự chuẩn hóa và tạo các bản WebP theo preset, hiển thị bằng `AppImage` + custom loader (N30, ARCHITECTURE mục 15). `sharp` là dependency mới, phải xin duyệt ở T2.2.
 - Đợt này chỉ sửa tài liệu, chưa có thay đổi code.
 
+## Quyết định đã chốt (T0.6)
+
+- Bảng `app.audit_logs` (migration `0002_audit_logs`) đúng DATA_MODEL mục 9, có thêm các `CHECK` định dạng; `app.enable_app_rls` + `app.make_append_only`: `app_runtime` chỉ SELECT, INSERT.
+- `record(input, { tx })` trong `src/server/audit/service.ts`: truyền `tx` để audit cùng commit/rollback với thao tác nghiệp vụ; lỗi thì ném ra (đóng cửa khi lỗi); không `tx` thì dùng `getDb()` (N31).
+- Action phải nằm trong `AUDIT_ACTIONS` (`src/server/audit/actions.ts`); thêm action chỉ cần sửa danh sách (N31).
+- `before`/`after` dùng lại `sanitizeForLog` của logger (không có bản thứ hai), thay NUL và surrogate lẻ, cắt nếu quá 16 KB (N32).
+- `getRequestContext(headers)` trong `src/server/audit/request-context.ts`: IP qua `net.isIP`, user agent ≤ 255 ký tự, `request_id` từ `x-vercel-id`; header IP chỉ đáng tin sau proxy của Vercel (N33, SECURITY mục 2).
+- Test: `src/server/audit/*.test.ts` (unit) và `tests/integration/audit-log.test.ts` (Postgres thật, role `app_runtime`); test không commit dòng audit nào (N34).
+- Audit nằm ở `src/server/audit/`, không phải `modules/audit/`; đã sửa cây thư mục ARCHITECTURE mục 4 (N31).
+
 ## Việc treo
+
+- Chính sách lưu trữ audit log (chốt khi làm T7): đề xuất giữ tối thiểu 12 tháng và sao lưu định kỳ (nằm trong bản `pg_dump` hằng tuần ở ARCHITECTURE mục 12). Bảng chỉ cho INSERT nên việc xóa dòng quá hạn (nếu có) phải làm bằng role migration hoặc một hàm riêng có kiểm soát, không cấp DELETE cho `app_runtime`. Cũng cần chốt có phải lưu lâu hơn theo yêu cầu kế toán/pháp lý không.
+- Chưa có chỗ nào gọi `record()`: các task từ T1 trở đi (đăng nhập, nhân viên, sản phẩm, đơn hàng, webhook) gọi và thêm action vào `AUDIT_ACTIONS` khi cần.
+- `requestId` hiện do người gọi tự lấy bằng `getRequestContext()`; khi làm guard/phiên (T1.1) cân nhắc một chỗ chung để logger và audit dùng cùng một `requestId` cho mỗi request.
+- Hardening tùy chọn: `app_runtime` vẫn INSERT được giá trị `created_at` tự chọn nếu có code bỏ qua `record()`; có thể thu hồi quyền INSERT theo cột hoặc thêm trigger ép `created_at = now()` nếu cần.
 
 - T0.7 (CI): PHẢI chạy `pnpm test:http` sau bước `pnpm build` (test khởi động `next start` thật). Đã ghi vào ROADMAP T0.7.
 - `Referrer-Policy: no-referrer` cho trang có token trên URL: làm ở T3.5 cùng trang đơn hàng.
