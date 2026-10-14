@@ -146,11 +146,6 @@ jobs:
           node scripts/ci/check-vitest-report.mts
           "${RUNNER_TEMP}/vitest-integration.json" "test:int"
 
-      - name: "TẠM (sẽ gỡ): đột biến phân quyền, test (a)(b)(c) phải đỏ"
-        env:
-          PG_CONTAINER: ${{ job.services.postgres.id }}
-        run: bash scripts/ci/tam-dot-bien.sh
-
   build-http:
     name: Build và test HTTP
     runs-on: ubuntu-24.04
