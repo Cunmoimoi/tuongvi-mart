@@ -5,6 +5,7 @@ import {
   loadLocalEnvFile,
   requireLocalDatabase,
 } from "./scripts/lib/local-db-guard.mts";
+import { reporters } from "./vitest.reporters.mts";
 
 // Test tích hợp tạo rồi xóa bảng thật trong schema `app`. Guard chạy ngay khi nạp config,
 // nên `pnpm test:int` dừng trước khi mở bất kỳ kết nối nào nếu không chắc đang ở local.
@@ -34,6 +35,7 @@ const { appEnv, connectionUrls } = readLocalConfig();
 export default defineConfig({
   test: {
     environment: "node",
+    reporters: reporters(),
     include: ["tests/integration/**/*.test.ts"],
     // Các test dùng chung một database và đều tạo/xóa bảng trong schema app.
     fileParallelism: false,

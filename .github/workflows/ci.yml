@@ -1,0 +1,268 @@
+# CI cho mọi PR vào main và mọi lần push lên main (ROADMAP T0.7, SECURITY mục "Chuỗi cung ứng và CI").
+#
+# Quy tắc của file này:
+# - Chỉ `pull_request`, KHÔNG BAO GIỜ `pull_request_target` (sự kiện đó chạy code của PR với quyền
+#   và secret của repo).
+# - Không dùng secret nào của repo. Mọi biến môi trường bên dưới là giá trị GIẢ, chỉ để
+#   `src/server/env.ts` hợp lệ ở APP_ENV=test; không trỏ tới dịch vụ thật nào.
+# - Chỉ dùng Action chính thức `actions/*` và `pnpm/action-setup`, ghim bằng commit SHA đầy đủ.
+#   Công cụ khác (gitleaks) tải từ bản phát hành chính thức, ghim phiên bản và kiểm SHA-256.
+# - Job "ci" tổng hợp kết quả các job khác: đặt "ci" làm điều kiện bắt buộc khi merge vào main.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # GIẢ: giá trị tối thiểu để src/server/env.ts hợp lệ ở APP_ENV=test (adapter giả, không secret).
+  APP_ENV: test
+  APP_URL: http://localhost:3000
+  PAYMENT_PROVIDER: fake
+  SMS_PROVIDER: console
+  CAPTCHA_PROVIDER: always-pass
+  STORAGE_PROVIDER: memory
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  static:
+    name: Typecheck, lint, format, unit test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cài pnpm (phiên bản lấy từ packageManager trong package.json)
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Cài Node.js (phiên bản lấy từ engines.node trong package.json)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Cài dependency
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Kiểm tra định dạng
+        run: pnpm format:check
+
+      - name: Unit test
+        env:
+          VITEST_JSON_REPORT: ${{ runner.temp }}/vitest-unit.json
+        run: pnpm test
+
+      - name: Không có unit test nào bị bỏ qua
+        run: node scripts/ci/check-vitest-report.mts "${RUNNER_TEMP}/vitest-unit.json" "unit"
+
+  integration:
+    name: Migration và test tích hợp (Postgres 17)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.11@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+        env:
+          # GIẢ: mật khẩu superuser của Postgres tạm, chỉ sống trong job này.
+          POSTGRES_PASSWORD: postgres-ci-gia
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Role có quyền DDL để chạy migration và dựng bảng cho test. DATABASE_URL (role app_runtime)
+      # được đặt ở bước "Đặt mật khẩu tạm" với mật khẩu ngẫu nhiên của lần chạy này.
+      DATABASE_MIGRATION_URL: postgresql://postgres:postgres-ci-gia@127.0.0.1:5432/postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cài pnpm (phiên bản lấy từ packageManager trong package.json)
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Cài Node.js (phiên bản lấy từ engines.node trong package.json)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Cài dependency
+        run: pnpm install --frozen-lockfile
+
+      - name: Áp dụng migration
+        run: pnpm db:migrate
+
+      # Không dùng `pnpm db:setup:local`: script đó cố ý chỉ chạy khi APP_ENV=local. Mật khẩu sinh
+      # mới mỗi lần chạy, che trong log bằng ::add-mask::, gửi cho psql qua stdin (không nằm trong
+      # tham số dòng lệnh) và chỉ tới các bước sau qua biến môi trường DATABASE_URL của job.
+      - name: Đặt mật khẩu tạm ngẫu nhiên cho role app_runtime
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 32)"
+          echo "::add-mask::${password}"
+          # Mật khẩu chỉ gồm 0-9a-f nên đặt thẳng vào chuỗi SQL và URL mà không cần escape.
+          printf "alter role app_runtime with login password '%s';\n" "${password}" \
+            | docker exec -i "${PG_CONTAINER}" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q
+          echo "DATABASE_URL=postgresql://app_runtime:${password}@127.0.0.1:5432/postgres" >> "${GITHUB_ENV}"
+
+      # Guard của test:int giữ nguyên: APP_ENV phải là local/test, host phải là localhost/127.0.0.1.
+      - name: Test tích hợp
+        env:
+          VITEST_JSON_REPORT: ${{ runner.temp }}/vitest-integration.json
+        run: pnpm test:int
+
+      - name: Không có test tích hợp nào bị bỏ qua
+        run: >-
+          node scripts/ci/check-vitest-report.mts
+          "${RUNNER_TEMP}/vitest-integration.json" "test:int"
+
+  build-http:
+    name: Build và test HTTP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # GIẢ: không có database nào ở cổng 1; build và test HTTP không kết nối database.
+      DATABASE_URL: postgresql://gia-khong-ket-noi@127.0.0.1:1/gia
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cài pnpm (phiên bản lấy từ packageManager trong package.json)
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Cài Node.js (phiên bản lấy từ engines.node trong package.json)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Cài dependency
+        run: pnpm install --frozen-lockfile
+
+      # Nghiệm thu T0.7: thiếu bản build thì test:http phải đỏ, không được xanh vì bỏ qua âm thầm.
+      - name: test:http phải đỏ khi chưa build
+        run: |
+          set -uo pipefail
+          log="${RUNNER_TEMP}/test-http-chua-build.log"
+          if pnpm test:http > "${log}" 2>&1; then
+            cat "${log}"
+            echo "::error::pnpm test:http xanh dù chưa có bản build: test đang bị bỏ qua âm thầm."
+            exit 1
+          fi
+          if ! grep -qF "Chưa có bản build" "${log}"; then
+            cat "${log}"
+            echo "::error::pnpm test:http đỏ nhưng không phải vì thiếu bản build."
+            exit 1
+          fi
+          echo "Đúng như mong đợi: chưa build thì pnpm test:http đỏ với lỗi 'Chưa có bản build'."
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test HTTP (next start trên bản build)
+        env:
+          VITEST_JSON_REPORT: ${{ runner.temp }}/vitest-http.json
+        run: pnpm test:http
+
+      - name: Không có test HTTP nào bị bỏ qua
+        run: node scripts/ci/check-vitest-report.mts "${RUNNER_TEMP}/vitest-http.json" "test:http"
+
+  audit:
+    name: pnpm audit (high trở lên)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cài pnpm (phiên bản lấy từ packageManager trong package.json)
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      # Đọc pnpm-lock.yaml, không cần cài dependency.
+      - name: pnpm audit
+        run: pnpm audit --audit-level high
+
+  gitleaks:
+    name: Quét secret (gitleaks, toàn bộ lịch sử)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      # SHA-256 của gitleaks_8.30.1_linux_x64.tar.gz, khớp gitleaks_8.30.1_checksums.txt của bản
+      # phát hành và digest mà GitHub ghi cho file đó. Đổi phiên bản thì phải đổi cả hai dòng.
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - name: Checkout toàn bộ lịch sử
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Tải gitleaks và kiểm tra SHA-256
+        run: |
+          set -euo pipefail
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --output "${RUNNER_TEMP}/${archive}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
+          mkdir -p "${RUNNER_TEMP}/gitleaks"
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}/gitleaks" gitleaks
+
+      # Quét mọi commit của mọi nhánh đã fetch (--all), không chỉ phần thay đổi của PR.
+      # --redact: không in giá trị secret ra log.
+      - name: Quét secret
+        run: |
+          "${RUNNER_TEMP}/gitleaks/gitleaks" version
+          "${RUNNER_TEMP}/gitleaks/gitleaks" git . \
+            --log-opts="--all --full-history" \
+            --redact --verbose --no-banner --exit-code 1
+
+  ci:
+    name: ci
+    if: always()
+    needs: [static, integration, build-http, audit, gitleaks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Mọi job phải thành công
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "${NEEDS}" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "${NEEDS}" | jq -e 'all(.[]; .result == "success")' > /dev/null
