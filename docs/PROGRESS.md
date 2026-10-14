@@ -11,8 +11,8 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.3 | Database và migration nền    | Đã merge   | #3  | Xem "Quyết định đã chốt"                                     |
 | T0.4 | Thư viện lõi phía server     | Đã merge   | #7  | `src/server/lib/*`, migration `0001_rate_limits`; xem "Quyết định đã chốt (T0.4)" |
 | T0.5 | Proxy (middleware) và headers bảo mật | Đã merge   | #8  | `src/proxy.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
-| T0.6 | Audit log                    | Chờ merge  | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
-| T0.7 | CI                           | Chưa làm   |     | Cần chốt cách đặt mật khẩu `app_runtime` cho CI              |
+| T0.6 | Audit log                    | Đã merge   | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
+| T0.7 | CI                           | Chờ merge  | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; `pnpm audit` đang đỏ, chờ quyết định |
 | T0.8 | Bộ component giao diện       | Chưa làm   |     |                                                              |
 | T0.9 | Khung adapter (Switchboard)  | Chưa làm   |     |                                                              |
 
@@ -70,6 +70,15 @@ Ngoài roadmap:
 - Test: `src/server/audit/*.test.ts` (unit) và `tests/integration/audit-log.test.ts` (Postgres thật, role `app_runtime`); test không commit dòng audit nào (N34).
 - Audit nằm ở `src/server/audit/`, không phải `modules/audit/`; đã sửa cây thư mục ARCHITECTURE mục 4 (N31).
 
+## Quyết định đã chốt (T0.7)
+
+- Workflow `.github/workflows/ci.yml` chạy khi có PR vào `main` và khi push lên `main`; không dùng `pull_request_target`, token chỉ `contents: read`, không dùng secret của repo, mọi biến môi trường là giá trị giả hợp lệ với `env.ts` ở `APP_ENV=test`. Có `concurrency` hủy lần chạy cũ của cùng nhánh và `timeout-minutes` cho mọi job.
+- 5 job chạy song song: `static` (typecheck → lint → format:check → unit), `integration` (Postgres 17 → migrate → mật khẩu tạm → `test:int`), `build-http` (`test:http` phải đỏ khi chưa build → build → `test:http`), `audit`, `gitleaks` (toàn bộ lịch sử, `--all`). Job `ci` tổng hợp: đặt `ci` làm check bắt buộc khi merge.
+- Mật khẩu `app_runtime` sinh mới mỗi lần chạy, không nới guard nào (N35). Test (a)(b)(c) của T0.3 chạy thật trên Postgres thường; đã chứng minh bằng thử đột biến trên CI (N35).
+- CI đỏ nếu bộ test rỗng hoặc có test skip/todo (`scripts/ci/check-vitest-report.mts`, N36).
+- Node 24.x qua `engines.node`, pnpm theo `packageManager` (N37). Action ghim bằng commit SHA: `actions/checkout` v7.0.1, `actions/setup-node` v7.0.0, `pnpm/action-setup` v6.1.0; `postgres:17.11` ghim digest; gitleaks 8.30.1 kiểm SHA-256.
+- Nghiệm thu: PR #12 (mọi job trừ `audit` xanh, xem "Việc treo"); PR nháp #13 với `SEPAY_API_TOKEN` giả làm CI đỏ ở gitleaks (run 38609910204), đã đóng và xóa nhánh, chuỗi giả không có trong `main`.
+
 ## Việc treo
 
 - Chính sách lưu trữ audit log (chốt khi làm T7): đề xuất giữ tối thiểu 12 tháng và sao lưu định kỳ (nằm trong bản `pg_dump` hằng tuần ở ARCHITECTURE mục 12). Bảng chỉ cho INSERT nên việc xóa dòng quá hạn (nếu có) phải làm bằng role migration hoặc một hàm riêng có kiểm soát, không cấp DELETE cho `app_runtime`. Cũng cần chốt có phải lưu lâu hơn theo yêu cầu kế toán/pháp lý không.
@@ -77,7 +86,9 @@ Ngoài roadmap:
 - `requestId` hiện do người gọi tự lấy bằng `getRequestContext()`; khi làm guard/phiên (T1.1) cân nhắc một chỗ chung để logger và audit dùng cùng một `requestId` cho mỗi request.
 - Hardening tùy chọn: `app_runtime` vẫn INSERT được giá trị `created_at` tự chọn nếu có code bỏ qua `record()`; có thể thu hồi quyền INSERT theo cột hoặc thêm trigger ép `created_at = now()` nếu cần.
 
-- T0.7 (CI): PHẢI chạy `pnpm test:http` sau bước `pnpm build` (test khởi động `next start` thật). Đã ghi vào ROADMAP T0.7.
+- T0.7: `pnpm audit --audit-level high` đỏ vì 3 lỗ hổng high (`next` < 16.3.8, `source-map-js` < 1.2.2, `braces` ≤ 3.0.3 chưa có bản vá); chờ chủ dự án quyết định, không tắt kiểm tra.
+- T0.7: chủ dự án bật branch protection cho `main` (check bắt buộc `ci`, cần review) sau khi PR #12 merge.
+- T0.7: nâng phiên bản Action/gitleaks/Postgres là việc làm tay; cân nhắc Dependabot cho `github-actions` (cần chủ dự án đồng ý).
 - `Referrer-Policy: no-referrer` cho trang có token trên URL: làm ở T3.5 cùng trang đơn hàng.
 - Chưa thử CSP với dịch vụ thật (Supabase, Sentry, Turnstile): mới có test trên server `next start` với giá trị giả. Phải thử trên staging trước khi mở bán (SECURITY mục 5).
 - T2.2: xin duyệt dependency `sharp` trước khi cài; chốt định dạng bản chuẩn hóa (đề xuất WebP chất lượng cao, giữ kênh alpha) và các giá trị ngân sách của bản chưa nêu.
@@ -92,5 +103,4 @@ Ngoài roadmap:
 - Câu hỏi mở Q15: cửa sổ "theo ngày" của giới hạn OTP đếm lại lúc 0h giờ Việt Nam hay 7h (UTC).
 
 - `minimum_password_length = 8` trong `supabase/config.toml` (mặc định của CLI là 6): làm ở T1.2.
-- Cách đặt mật khẩu role `app_runtime` cho CI: chốt ở T0.7.
 - Câu hỏi mở Q1–Q14 trong mục "Câu hỏi mở" của `docs/README.md`; Q5 (ngân hàng) bắt buộc trước giai đoạn 3, Q6 (SMS OTP) bắt buộc trước khi mở bán.

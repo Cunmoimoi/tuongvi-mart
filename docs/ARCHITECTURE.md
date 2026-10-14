@@ -72,12 +72,14 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 ```
 .
 ├── CLAUDE.md
+├── .github/workflows/ci.yml         # CI (T0.7): job tổng hợp "ci" là điều kiện bắt buộc khi merge
 ├── docs/
 ├── drizzle.config.ts                # cấu hình drizzle-kit (chỉ dùng ở máy dev và CI)
 ├── drizzle/                         # migration sinh bởi drizzle-kit (commit vào git)
 ├── supabase/config.toml             # cấu hình Supabase local (supabase start)
 ├── scripts/                         # chạy trực tiếp bằng Node; file .mts để Node hiểu là ESM
 │   ├── lib/local-db-guard.mts       # chặn công cụ chạy nhầm vào database thật
+│   ├── ci/check-vitest-report.mts   # CI: đỏ nếu bộ test rỗng hoặc có test bị skip/todo
 │   ├── db-migrate.mts               # áp dụng migration bằng DATABASE_MIGRATION_URL
 │   ├── db-set-local-password.mts    # đặt mật khẩu app_runtime ở local (chỉ APP_ENV=local)
 │   ├── create-admin.ts              # tạo admin đầu tiên (chạy tay, hỏi mật khẩu qua prompt)
