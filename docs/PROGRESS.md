@@ -13,7 +13,7 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.5 | Proxy (middleware) và headers bảo mật | Đã merge   | #8  | `src/proxy.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
 | T0.6 | Audit log                    | Đã merge   | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
 | T0.7 | CI                           | Đã merge   | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; có 1 ngoại lệ audit (`braces`), xem "Việc treo" |
-| T0.8 | Bộ component giao diện       | Đang làm   |     | Chia hai phần: A (tokens, font, component cơ bản, AppImage, `/dev/ui`) đang chờ PR; B (khung storefront: header, sidebar, footer...) chưa làm. Xem "Quyết định đã chốt (T0.8 phần A)" |
+| T0.8 | Bộ component giao diện       | Đang làm   | #14 | Chia hai phần: A (tokens, font, component cơ bản, AppImage, `/dev/ui`) đang chờ PR; B (khung storefront: header, sidebar, footer...) chưa làm. Xem "Quyết định đã chốt (T0.8 phần A)" |
 | T0.9 | Khung adapter (Switchboard)  | Chưa làm   |     |                                                              |
 
 Ngoài roadmap:
