@@ -4,3 +4,13 @@ allowBuilds:
   esbuild: true
   sharp: false
   unrs-resolver: false
+
+# Ngoại lệ của `pnpm audit`: chỉ thêm khi chủ dự án đã duyệt, mỗi dòng ghi lý do và ngày xem lại
+# (SECURITY mục "Chuỗi cung ứng và CI"). Hết hạn thì gỡ hoặc duyệt lại, không gia hạn âm thầm.
+auditConfig:
+  ignoreGhsas:
+    # braces <= 3.0.3: tràn stack khi gặp mẫu lồng sâu. Chưa có bản vá (15/10/2026). Chỉ nằm
+    # trong eslint-config-next > @next/eslint-plugin-next > fast-glob > micromatch > braces: chạy
+    # lúc lint với mẫu glob do dự án viết, không có trong bản build production.
+    # Chủ dự án duyệt 15/10/2026. Xem lại trước 14/11/2026 (docs/PROGRESS.md, "Việc treo").
+    - GHSA-vfj7-8cjw-p6xm

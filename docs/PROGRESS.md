@@ -12,7 +12,7 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.4 | Thư viện lõi phía server     | Đã merge   | #7  | `src/server/lib/*`, migration `0001_rate_limits`; xem "Quyết định đã chốt (T0.4)" |
 | T0.5 | Proxy (middleware) và headers bảo mật | Đã merge   | #8  | `src/proxy.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
 | T0.6 | Audit log                    | Đã merge   | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
-| T0.7 | CI                           | Chờ merge  | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; `pnpm audit` đang đỏ, chờ quyết định |
+| T0.7 | CI                           | Chờ merge  | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; có 1 ngoại lệ audit (`braces`), xem "Việc treo" |
 | T0.8 | Bộ component giao diện       | Chưa làm   |     |                                                              |
 | T0.9 | Khung adapter (Switchboard)  | Chưa làm   |     |                                                              |
 
@@ -77,7 +77,8 @@ Ngoài roadmap:
 - Mật khẩu `app_runtime` sinh mới mỗi lần chạy, không nới guard nào (N35). Test (a)(b)(c) của T0.3 chạy thật trên Postgres thường; đã chứng minh bằng thử đột biến trên CI (N35).
 - CI đỏ nếu bộ test rỗng hoặc có test skip/todo (`scripts/ci/check-vitest-report.mts`, N36).
 - Node 24.x qua `engines.node`, pnpm theo `packageManager` (N37). Action ghim bằng commit SHA: `actions/checkout` v7.0.1, `actions/setup-node` v7.0.0, `pnpm/action-setup` v6.1.0; `postgres:17.11` ghim digest; gitleaks 8.30.1 kiểm SHA-256.
-- Nghiệm thu: PR #12 (mọi job trừ `audit` xanh, xem "Việc treo"); PR nháp #13 với `SEPAY_API_TOKEN` giả làm CI đỏ ở gitleaks (run 38609910204), đã đóng và xóa nhánh, chuỗi giả không có trong `main`.
+- `pnpm audit` (15/10/2026, chủ dự án duyệt): nâng `next`/`eslint-config-next` lên 16.3.8 (GHSA-cjq9-62q9-8jv4), `source-map-js` lên 1.2.2 chỉ đổi lockfile (GHSA-68fv-2mgg-jv7q); `braces` chưa có bản vá nên có đúng một ngoại lệ `auditConfig.ignoreGhsas` trong `pnpm-workspace.yaml` (GHSA-vfj7-8cjw-p6xm).
+- Nghiệm thu: PR #12; PR nháp #13 với `SEPAY_API_TOKEN` giả làm CI đỏ ở gitleaks (run 38609910204), đã đóng và xóa nhánh, chuỗi giả không có trong `main`.
 
 ## Việc treo
 
@@ -86,7 +87,8 @@ Ngoài roadmap:
 - `requestId` hiện do người gọi tự lấy bằng `getRequestContext()`; khi làm guard/phiên (T1.1) cân nhắc một chỗ chung để logger và audit dùng cùng một `requestId` cho mỗi request.
 - Hardening tùy chọn: `app_runtime` vẫn INSERT được giá trị `created_at` tự chọn nếu có code bỏ qua `record()`; có thể thu hồi quyền INSERT theo cột hoặc thêm trigger ép `created_at = now()` nếu cần.
 
-- T0.7: `pnpm audit --audit-level high` đỏ vì 3 lỗ hổng high (`next` < 16.3.8, `source-map-js` < 1.2.2, `braces` ≤ 3.0.3 chưa có bản vá); chờ chủ dự án quyết định, không tắt kiểm tra.
+- **Hạn 14/11/2026**: xem lại ngoại lệ audit `GHSA-vfj7-8cjw-p6xm` (`braces` ≤ 3.0.3, tràn stack khi gặp mẫu lồng sâu) trong `auditConfig.ignoreGhsas` của `pnpm-workspace.yaml`. Lý do tạm chấp nhận: chưa có bản vá, `braces` chỉ nằm trong chuỗi lint (`eslint-config-next` > `@next/eslint-plugin-next` > `fast-glob` > `micromatch` > `braces`), chạy với mẫu glob do dự án viết, không có trong bản build production. Tới hạn: có bản vá hoặc `eslint-config-next` bỏ `fast-glob` 3.3.1 thì nâng và gỡ ngoại lệ; chưa có thì báo chủ dự án duyệt lại, không gia hạn âm thầm. Không thêm ngoại lệ nào khác.
+- `pnpm audit` còn 1 lỗ hổng mức moderate ở `esbuild` (dưới ngưỡng `high` nên CI không đỏ); chưa xử lý.
 - T0.7: chủ dự án bật branch protection cho `main` (check bắt buộc `ci`, cần review) sau khi PR #12 merge.
 - T0.7: nâng phiên bản Action/gitleaks/Postgres là việc làm tay; cân nhắc Dependabot cho `github-actions` (cần chủ dự án đồng ý).
 - `Referrer-Policy: no-referrer` cho trang có token trên URL: làm ở T3.5 cùng trang đơn hàng.
