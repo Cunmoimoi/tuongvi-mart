@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     plugins: { local: localPlugin },
     rules: {
       "local/no-server-import-in-client": "error",
+      // Ảnh nội dung (sản phẩm, banner, danh mục) luôn qua component AppImage với `preset`; không
+      // dùng <img> trần (CLAUDE.md, ARCHITECTURE mục 15). Mặc định của eslint-config-next chỉ cảnh báo.
+      "@next/next/no-img-element": "error",
       "no-restricted-imports": [
         "error",
         {

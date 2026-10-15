@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
   // (guide ai-agents, mục "Opting out"). Quy tắc cho agent do dự án tự quản lý trong CLAUDE.md.
   agentRules: false,
   images: {
+    // Các chiều rộng này CHÍNH LÀ chiều rộng các bản ảnh của preset (src/lib/images/presets.ts;
+    // có test so khớp). Nhờ vậy `srcset` do next/image sinh chỉ gồm cỡ thật, không có cỡ thừa.
+    imageSizes: [120, 160, 240, 320],
+    deviceSizes: [480, 750, 800, 1040, 1200, 1560],
     remotePatterns: supabaseHostname
       ? [
           {

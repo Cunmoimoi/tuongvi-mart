@@ -12,8 +12,8 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.4 | Thư viện lõi phía server     | Đã merge   | #7  | `src/server/lib/*`, migration `0001_rate_limits`; xem "Quyết định đã chốt (T0.4)" |
 | T0.5 | Proxy (middleware) và headers bảo mật | Đã merge   | #8  | `src/proxy.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
 | T0.6 | Audit log                    | Đã merge   | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
-| T0.7 | CI                           | Chờ merge  | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; có 1 ngoại lệ audit (`braces`), xem "Việc treo" |
-| T0.8 | Bộ component giao diện       | Chưa làm   |     |                                                              |
+| T0.7 | CI                           | Đã merge   | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; có 1 ngoại lệ audit (`braces`), xem "Việc treo" |
+| T0.8 | Bộ component giao diện       | Đang làm   |     | Chia hai phần: A (tokens, font, component cơ bản, AppImage, `/dev/ui`) đang chờ PR; B (khung storefront: header, sidebar, footer...) chưa làm. Xem "Quyết định đã chốt (T0.8 phần A)" |
 | T0.9 | Khung adapter (Switchboard)  | Chưa làm   |     |                                                              |
 
 Ngoài roadmap:
@@ -60,6 +60,19 @@ Ngoài roadmap:
 - Ảnh: admin chỉ tải ảnh gốc (≤ 12 MB, ≤ 40 megapixel); server tự chuẩn hóa và tạo các bản WebP theo preset, hiển thị bằng `AppImage` + custom loader (N30, ARCHITECTURE mục 15). `sharp` là dependency mới, phải xin duyệt ở T2.2.
 - Đợt này chỉ sửa tài liệu, chưa có thay đổi code.
 
+## Quyết định đã chốt (T0.8 phần A)
+
+- T0.8 chia hai phần theo yêu cầu của chủ dự án: **A** (đã làm) gồm design tokens, font, component cơ bản, `AppImage`, `/dev/ui`, `Logo`; **B** (chưa làm) gồm khung storefront (header, thanh hình thức mua, sidebar + mega menu, thanh thông báo, nút chat, footer, header/bottom nav mobile, trang danh mục mobile), khung admin, và các component còn lại của danh sách ROADMAP (Card, Pagination, ConfirmDialog; Modal/BottomSheet đã gộp vào `ResponsiveDialog`). Nghiệm thu "khung trang đúng ở 390px/1280px" và "ảnh chụp khớp ảnh tham chiếu 01, 04" thuộc phần B.
+- Design tokens (màu, chữ theo vai trò, bo góc, bóng, chuyển động) nằm trong `src/app/globals.css` (`@theme`); font Be Vietnam Pro (400/500/600/700, subset `vietnamese` + `latin`) qua `next/font/google` ở `src/app/layout.tsx`. Font tự host: bản build chứa file `.woff2` trong `/_next/static/media`, `@font-face` chỉ trỏ vào đó, CSP không cần `font-src` riêng (`tests/http/dev-ui.test.ts` kiểm). Cần mạng khi chạy `next build` và lần đầu `next dev` để tải font từ Google, trình duyệt thì không gọi Google lúc chạy. Viewport không đặt `maximumScale`/`userScalable` (test kiểm).
+- Component ở `src/components/ui/`: `Button` (primary/soft/outline/ghost/danger, sm/md/lg, loading giữ focus nhờ `aria-disabled` thay cho `disabled`), `IconButton` (bắt buộc `label` → `aria-label`), `Chip`, `Badge`, `PriceTag`, `QuantityStepper`, `Input`, `PhoneInput`, `Select`, `Textarea`, `Checkbox`, `ResponsiveDialog`, `Drawer`, `Toast`, `Skeleton`, `EmptyState`, `Breadcrumb`, `Tabs`, `Accordion`, `SegmentedControl`, `StickyActionBar`, `Logo`, `AppImage`. Ô nhập liệu luôn có nhãn (`hideLabel` để ẩn nhưng giữ cho trình đọc màn hình), chữ ≥ 16px, lỗi đọc ra bằng `role="alert"` và gắn qua `aria-describedby`.
+- Hộp thoại dựng trên `<dialog>` gốc, không thêm thư viện (N38). Icon tạm tự giữ trong một file (N39).
+- Tiền hiển thị qua một nơi duy nhất `src/lib/format.ts` (`formatVnd`, `formatSavingsShort`, `discountPercent`, `savingsAmount`, `formatUnitPrice`); số thực/âm/NaN ném `RangeError` thay vì hiển thị sai. Quy tắc làm tròn "Tiết kiệm 13,5K" là giả định của phần hiển thị: làm tròn XUỐNG tới 100đ (không khoe nhiều hơn thực tế), dưới 1.000đ ghi đầy đủ; số tiền thật vẫn do server tính.
+- `QuantityStepper`: logic thuần ở `src/lib/quantity.ts`; giới hạn `max` chỉ là gợi ý, server vẫn kiểm tồn.
+- `AppImage` + `src/lib/images/presets.ts` (preset, tỉ lệ khung, `sizes` sinh từ bảng cột lưới) + `loader.ts` (chọn bản gần nhất không nhỏ hơn): xem N40. Hiện chỉ có ảnh giữ chỗ trong `public/placeholders/` (SVG tự vẽ, không phải ảnh của thương hiệu khác); chưa có pipeline nén ảnh (T2.2). ESLint: `@next/next/no-img-element` ở mức `error` (có test chạy ESLint thật trên đoạn mã có `<img>` trần).
+- `/dev/ui`: chỉ render khi `APP_ENV=local`, còn lại 404 (N42). Test: unit (`src/server/dev-ui.test.ts`) và HTTP trên bản build thật ở local/test/staging/production.
+- Vitest chia project `server` và `ui` (N41); `pnpm check` chạy cả hai.
+- Đã kiểm trên trình duyệt (Browser pane, `pnpm dev -p 3100`): Console không có lỗi CSP; font Be Vietnam Pro tải đủ các trọng lượng; không cuộn ngang ở 430px; hộp thoại là bottom sheet ở mobile và modal giữa ở desktop; focus nhìn thấy được. Chưa có Playwright nên chưa có ảnh chụp tự động.
+
 ## Quyết định đã chốt (T0.6)
 
 - Bảng `app.audit_logs` (migration `0002_audit_logs`) đúng DATA_MODEL mục 9, có thêm các `CHECK` định dạng; `app.enable_app_rls` + `app.make_append_only`: `app_runtime` chỉ SELECT, INSERT.
@@ -95,6 +108,12 @@ Ngoài roadmap:
 - Chưa thử CSP với dịch vụ thật (Supabase, Sentry, Turnstile): mới có test trên server `next start` với giá trị giả. Phải thử trên staging trước khi mở bán (SECURITY mục 5).
 - T2.2: xin duyệt dependency `sharp` trước khi cài; chốt định dạng bản chuẩn hóa (đề xuất WebP chất lượng cao, giữ kênh alpha) và các giá trị ngân sách của bản chưa nêu.
 - T2.9: chốt preset cho banner mega menu (2,2:1) và ảnh tiêu đề khối (7:1); chưa có trong danh sách preset.
+- T0.8 phần A, chờ chủ dự án duyệt: thêm `lucide-react` (icon theo UI_SPEC 2.3; ISC, được bảo trì tích cực, không có dependency runtime ngoài `react`; phương án thay thế: giữ bộ icon tự viết ở `icons.tsx`, N39). Chưa cài.
+- T0.8 phần A: Q17 (màu `primary`/`sale` chưa đạt tương phản AA với chữ nhỏ). Làm trước khi chạy Lighthouse ở cổng duyệt 1.
+- T0.8 phần A: font chưa có `<link rel="preload">` trong HTML (Turbopack không phát ra); trang đầu có thể thấy chữ dự phòng một thoáng (`display: swap`). Xem lại khi đo LCP.
+- T0.8 phần A: `sizes` của `AppImage` dùng phần chiều ngang ngoài lưới ước lượng (UI_SPEC không ghi padding ở 600–1279px); đối chiếu lại khi dựng khung ở phần B.
+- T2.9 (đã nêu ở trên) vẫn cần chốt preset banner mega menu và ảnh tiêu đề khối; `AppImage` chưa có hai preset này.
+- Chưa có test tương tác DOM (bấm, bàn phím, focus) cho `Tabs`, `Accordion`, hộp thoại; mới có logic thuần và render tĩnh. Thêm cùng Playwright (T0.8 phần B hoặc giai đoạn sau).
 - T3.2: chốt cách kiểm "từ chối khởi động" khi `shipping_policy` chưa hiện thực (hook khởi động của Next.js hay kiểm lúc nạp cấu hình).
 - Câu hỏi mở Q16: phí giao hàng sau này tính theo km hay theo khu vực (`docs/README.md`).
 - Thêm Supabase vào `connect-src` khi làm upload ảnh bằng signed URL; thêm domain tile OSM vào `img-src` ở T1.4.

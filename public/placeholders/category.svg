@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Ảnh danh mục chưa có">
+  <rect width="240" height="240" fill="#f3f4f6"/>
+  <g fill="none" stroke="#d1d5db" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="76" y="76" width="36" height="36" rx="6"/>
+    <rect x="128" y="76" width="36" height="36" rx="6"/>
+    <rect x="76" y="128" width="36" height="36" rx="6"/>
+    <rect x="128" y="128" width="36" height="36" rx="6"/>
+  </g>
+</svg>
