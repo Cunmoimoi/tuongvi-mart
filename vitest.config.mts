@@ -1,9 +1,11 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
+import { reporters } from "./vitest.reporters.mts";
 
 export default defineConfig({
   test: {
     environment: "node",
+    reporters: reporters(),
     // Chỉ unit test. Test tích hợp cần Postgres local nên chạy riêng bằng `pnpm test:int`
     // (vitest.integration.config.mts), để `pnpm check` không phụ thuộc vào Docker.
     include: ["src/**/*.test.ts"],

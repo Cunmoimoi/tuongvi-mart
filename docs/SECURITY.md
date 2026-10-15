@@ -84,8 +84,12 @@ Mục tiêu: không ai lấy được hàng mà không trả tiền, không ai l
 - Quyền của khách: xem, sửa thông tin; yêu cầu xóa tài khoản (ẩn danh hóa dữ liệu cá nhân, giữ đơn hàng cho kế toán).
 
 ### Chuỗi cung ứng và CI
-- CI chạy: typecheck, lint, unit test, integration test, `pnpm audit --audit-level high`, gitleaks, build.
-- Nhánh `main` được bảo vệ: phải qua CI và có người review (chủ dự án duyệt PR, kể cả khi Claude Code viết).
+- CI (`.github/workflows/ci.yml`) chạy: typecheck, lint, format, unit test, migration + integration test trên Postgres 17, build + `pnpm test:http`, `pnpm audit --audit-level high`, gitleaks trên toàn bộ lịch sử. Job tổng hợp `ci` chỉ xanh khi mọi job xanh.
+- Workflow chỉ chạy trên `pull_request` và `push` vào `main`, không bao giờ `pull_request_target`; token chỉ có `contents: read`; checkout với `persist-credentials: false`; không dùng secret nào của repo, mọi biến môi trường là giá trị giả.
+- Chỉ dùng Action `actions/*` và `pnpm/action-setup`, ghim bằng commit SHA đầy đủ; image Postgres ghim bằng digest; gitleaks tải từ bản phát hành chính thức, ghim phiên bản và kiểm SHA-256. Thêm Action hay công cụ khác phải được chủ dự án đồng ý. Nâng phiên bản là việc làm tay (chưa có Dependabot/Renovate cho Action).
+- Mật khẩu `app_runtime` trong CI sinh mới mỗi lần chạy (`openssl rand`), che bằng `::add-mask::`; guard của `pnpm db:setup:local` và `pnpm test:int` giữ nguyên (N35).
+- Không được tắt `pnpm audit` hay thêm ngoại lệ âm thầm. Ngoại lệ gitleaks (nếu có) chỉ thêm hẹp trong `.gitleaks.toml` theo đường dẫn và mẫu cụ thể, chủ dự án duyệt từng dòng. Lưu ý: gitleaks đọc `.gitleaks.toml` từ chính commit đang quét, nên một PR có thể tự nới cấu hình; người duyệt PR phải soi mọi thay đổi ở `.gitleaks.toml` và `.github/`.
+- Nhánh `main` được bảo vệ: phải qua CI (check `ci` bắt buộc) và có người review (chủ dự án duyệt PR, kể cả khi Claude Code viết).
 - Chỉ thêm dependency khi đã được đồng ý; ưu tiên gói phổ biến, còn bảo trì.
 
 ## 3. Test bảo mật bắt buộc

@@ -67,7 +67,7 @@ KHÔNG dùng lại: toàn bộ `src/store/*`, `src/services/*`, `src/middleware.
 
 ### T0.7 CI
 - GitHub Actions: install → typecheck → lint → unit → khởi Postgres + migrate → integration → `pnpm audit --audit-level high` → gitleaks → build → `pnpm test:http` (BẮT BUỘC chạy sau bước build, vì test khởi động `next start` thật).
-- Câu hỏi mở: cách đặt mật khẩu role `app_runtime` cho CI (đề xuất: workflow tự đặt mật khẩu tạm, giữ nguyên guard nghiêm).
+- Mật khẩu role `app_runtime` cho CI: đã chốt, workflow tự đặt mật khẩu ngẫu nhiên mỗi lần chạy, giữ nguyên guard (N35).
 - Nghiệm thu: PR mẫu chạy xanh; commit thử một chuỗi giống secret làm CI đỏ; bỏ bước build thì `pnpm test:http` đỏ (không được bỏ qua âm thầm).
 
 ### T0.8 Bộ component giao diện
