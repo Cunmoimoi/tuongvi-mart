@@ -73,7 +73,9 @@ function expectRejected(outcome: Outcome<{ ok: boolean }>) {
 describe.each(CASES)("hợp đồng payment/$provider (APP_ENV=$appEnv)", ({ provider, appEnv }) => {
   it("verifyWebhook: thiếu chữ ký thì không hợp lệ", async () => {
     const { adapter } = build(provider, appEnv);
-    expectRejected(await settle(() => adapter.verifyWebhook({ headers: new Headers(), rawBody: BODY })));
+    expectRejected(
+      await settle(() => adapter.verifyWebhook({ headers: new Headers(), rawBody: BODY })),
+    );
   });
 
   it("verifyWebhook: ký bằng secret khác thì không hợp lệ", async () => {

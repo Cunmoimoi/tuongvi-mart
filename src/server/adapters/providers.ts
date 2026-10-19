@@ -5,7 +5,7 @@ import "server-only";
  * thật hay giả (ARCHITECTURE mục 9). `env.ts` lấy danh sách giá trị hợp lệ và danh sách adapter
  * giả từ đây; `adapters/<port>/index.ts` phải có đúng các tên này (TypeScript kiểm).
  *
- * Quy ước file (test quét `adapters.scan.test.ts` kiểm): adapter thật nằm ở
+ * Quy ước file (test quét `adapters/scan.test.ts` kiểm): adapter thật nằm ở
  * `adapters/<port>/<tên>.ts`, adapter giả ở `adapters/<port>/fakes/<tên>.ts`.
  */
 
@@ -25,8 +25,8 @@ export const ADAPTER_PORTS = {
 
 export type AdapterPortName = keyof typeof ADAPTER_PORTS;
 export type ProviderEnvVar = (typeof ADAPTER_PORTS)[AdapterPortName]["envVar"];
-export type ProviderName<P extends AdapterPortName> =
-  keyof (typeof ADAPTER_PORTS)[P]["providers"] & string;
+export type ProviderName<P extends AdapterPortName> = keyof (typeof ADAPTER_PORTS)[P]["providers"] &
+  string;
 
 export const ADAPTER_PORT_NAMES = Object.keys(ADAPTER_PORTS) as AdapterPortName[];
 

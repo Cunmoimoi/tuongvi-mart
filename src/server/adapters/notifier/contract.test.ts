@@ -53,7 +53,11 @@ const HIDDEN = [
   TELEGRAM_URL_WITH_TOKEN,
 ];
 
-async function leaksOf(adapter: NotifierPort, sink = createWriteSink(), network = createNetworkGuard()) {
+async function leaksOf(
+  adapter: NotifierPort,
+  sink = createWriteSink(),
+  network = createNetworkGuard(),
+) {
   const outcome = await settle(() => adapter.notifyOwner(ALERT));
   return { outcome, leaks: findLeaks(outgoingTexts(outcome, sink, network), HIDDEN) };
 }

@@ -144,11 +144,14 @@ describe("cấu trúc thư mục adapters/ khớp bảng nhà cung cấp", () =>
     },
   );
 
-  it.each(ADAPTER_PORT_NAMES)("%s: bảng trong index.ts có đúng các tên trong providers.ts", (port) => {
-    expect(Object.keys(PORT_CASES[port].registry).sort()).toStrictEqual(
-      [...providerNames(port)].sort(),
-    );
-  });
+  it.each(ADAPTER_PORT_NAMES)(
+    "%s: bảng trong index.ts có đúng các tên trong providers.ts",
+    (port) => {
+      expect(Object.keys(PORT_CASES[port].registry).sort()).toStrictEqual(
+        [...providerNames(port)].sort(),
+      );
+    },
+  );
 
   it.each(ALL_PROVIDERS)("$port/$provider có trạng thái hợp lệ", ({ kind, status }) => {
     expect(["implemented", "not-implemented"]).toContain(status);
@@ -218,8 +221,11 @@ describe("adapter giả tự từ chối ở staging và production", () => {
 
   it.each(cases)("$port/$provider.create (APP_ENV=$appEnv)", ({ port, provider, appEnv }) => {
     const definition = PORT_CASES[port].registry[provider];
-    const create = definition?.create as unknown as (config: AdapterEnv, deps: AdapterDeps) => unknown;
+    const create = definition?.create as unknown as (
+      config: AdapterEnv,
+      deps: AdapterDeps,
+    ) => unknown;
     const config = { ...adapterEnv({ APP_ENV: appEnv }), [ADAPTER_PORTS[port].envVar]: provider };
-    expect(() => create(config as AdapterEnv, {})).toThrow(/adapter giả/);
+    expect(() => create(config as AdapterEnv, {})).toThrow(`${port}/${provider} là adapter giả`);
   });
 });

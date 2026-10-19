@@ -89,9 +89,9 @@ describe("payment/fake: verifyWebhook", () => {
   it("lệch quá 300 giây (cả quá khứ lẫn tương lai) → stale-timestamp; đúng 300 giây vẫn nhận", async () => {
     const adapter = payment();
     for (const timestamp of [NOW_SECONDS - 301, NOW_SECONDS + 301]) {
-      expect(await adapter.verifyWebhook({ headers: sign(BODY, timestamp), rawBody: BODY })).toStrictEqual(
-        { ok: false, reason: "stale-timestamp" },
-      );
+      expect(
+        await adapter.verifyWebhook({ headers: sign(BODY, timestamp), rawBody: BODY }),
+      ).toStrictEqual({ ok: false, reason: "stale-timestamp" });
     }
     for (const timestamp of [NOW_SECONDS - 300, NOW_SECONDS + 300]) {
       expect(
@@ -100,14 +100,17 @@ describe("payment/fake: verifyWebhook", () => {
     }
   });
 
-  it.each(["abc", "1.5", "", "-1", "1e9"])("timestamp không phải số nguyên giây %j → không hợp lệ", async (timestamp) => {
-    const headers = new Headers({
-      "x-fake-timestamp": timestamp,
-      "x-fake-signature":
-        "sha256=" + createHmac("sha256", SECRET).update(`${timestamp}.${BODY}`).digest("hex"),
-    });
-    expect((await payment().verifyWebhook({ headers, rawBody: BODY })).ok).toBe(false);
-  });
+  it.each(["abc", "1.5", "", "-1", "1e9"])(
+    "timestamp không phải số nguyên giây %j → không hợp lệ",
+    async (timestamp) => {
+      const headers = new Headers({
+        "x-fake-timestamp": timestamp,
+        "x-fake-signature":
+          "sha256=" + createHmac("sha256", SECRET).update(`${timestamp}.${BODY}`).digest("hex"),
+      });
+      expect((await payment().verifyWebhook({ headers, rawBody: BODY })).ok).toBe(false);
+    },
+  );
 });
 
 describe("payment/fake: parseWebhook", () => {
@@ -177,9 +180,9 @@ describe("payment/fake: listTransactions", () => {
   });
 
   it("sinceId không tồn tại → từ chối (không âm thầm trả lại từ đầu)", async () => {
-    await expect(payment(transactions).listTransactions({ sinceId: "99", limit: 10 })).rejects.toThrow(
-      RangeError,
-    );
+    await expect(
+      payment(transactions).listTransactions({ sinceId: "99", limit: 10 }),
+    ).rejects.toThrow(RangeError);
   });
 
   it("giữ bản sao: sửa mảng đầu vào sau khi tạo không ảnh hưởng", async () => {

@@ -197,9 +197,11 @@ describe("(b) adapter giả ở staging và production", () => {
 
   it.each(cases)(
     "lớp 2, hàm chọn: $envVar=$provider ở APP_ENV=$appEnv → từ chối dù env.ts bị bỏ qua",
-    ({ port, provider, appEnv }) => {
+    ({ port, envVar, provider, appEnv }) => {
+      // Khớp đúng thông điệp của hàm chọn (`<BIẾN>=<tên>`), không phải của factory adapter giả
+      // (`<port>/<tên>`, lớp 3): gỡ lớp 2 thì test này phải đỏ dù lớp 3 vẫn chặn.
       expect(() => SELECTORS[port](configFor(port, provider, appEnv))).toThrow(
-        /adapter giả/,
+        `${envVar}=${provider} là adapter giả`,
       );
     },
   );

@@ -1,5 +1,11 @@
 import "server-only";
 import { z } from "zod";
+import {
+  ADAPTER_PORT_NAMES,
+  ADAPTER_PORTS,
+  providerKind,
+  providerNames,
+} from "@/server/adapters/providers";
 
 const APP_ENVS = ["local", "test", "staging", "production"] as const;
 export type AppEnv = (typeof APP_ENVS)[number];
@@ -29,10 +35,13 @@ const rawEnvSchema = z.object({
   PAYEE_ACCOUNT_NO: z.string().min(1).optional(),
   PAYEE_ACCOUNT_NAME: z.string().min(1).optional(),
 
-  PAYMENT_PROVIDER: z.string().min(1),
-  SMS_PROVIDER: z.string().min(1),
-  CAPTCHA_PROVIDER: z.string().min(1),
-  STORAGE_PROVIDER: z.string().min(1),
+  // Chọn adapter (ARCHITECTURE mục 9). Chỉ nhận tên có trong src/server/adapters/providers.ts; gõ
+  // sai thì ứng dụng không khởi động thay vì lỗi ở lần gọi đầu tiên.
+  PAYMENT_PROVIDER: z.enum(providerNames("payment")),
+  SMS_PROVIDER: z.enum(providerNames("sms")),
+  CAPTCHA_PROVIDER: z.enum(providerNames("captcha")),
+  STORAGE_PROVIDER: z.enum(providerNames("storage")),
+  NOTIFIER_PROVIDER: z.enum(providerNames("notifier")),
 
   SMS_HOOK_SECRET: z.string().min(1).optional(),
   TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
@@ -43,7 +52,9 @@ const rawEnvSchema = z.object({
   CRON_SECRET: z.string().min(1).optional(),
 
   SENTRY_DSN: z.string().optional(),
-  OWNER_ALERT_CHANNEL: z.string().optional(),
+  // Kênh cảnh báo cho chủ shop khi NOTIFIER_PROVIDER=telegram.
+  OWNER_ALERT_TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+  OWNER_ALERT_TELEGRAM_CHAT_ID: z.string().min(1).optional(),
 });
 
 type RawEnv = z.infer<typeof rawEnvSchema>;
@@ -66,14 +77,9 @@ const REQUIRED_ONLY_IN_PRODUCTION_LIKE: readonly (keyof RawEnv)[] = [
   "HANDOVER_SECRET",
   "VIEW_TOKEN_PEPPER",
   "CRON_SECRET",
-];
-
-// Giá trị đánh dấu adapter giả: không được dùng ở staging/production.
-const MOCK_PROVIDER_VALUES: readonly [keyof RawEnv, string][] = [
-  ["PAYMENT_PROVIDER", "fake"],
-  ["SMS_PROVIDER", "console"],
-  ["CAPTCHA_PROVIDER", "always-pass"],
-  ["STORAGE_PROVIDER", "memory"],
+  // Staging/production không được dùng notifier `noop` (adapter giả), nên kênh thật là bắt buộc.
+  "OWNER_ALERT_TELEGRAM_BOT_TOKEN",
+  "OWNER_ALERT_TELEGRAM_CHAT_ID",
 ];
 
 const envSchema = rawEnvSchema.superRefine((value, ctx) => {
@@ -81,12 +87,16 @@ const envSchema = rawEnvSchema.superRefine((value, ctx) => {
     return;
   }
 
-  for (const [key, mockValue] of MOCK_PROVIDER_VALUES) {
-    if (value[key] === mockValue) {
+  // Lớp chặn thứ nhất với adapter giả; lớp thứ hai nằm trong hàm chọn adapter
+  // (src/server/adapters/select.ts), lớp thứ ba trong chính factory của adapter giả.
+  for (const port of ADAPTER_PORT_NAMES) {
+    const key = ADAPTER_PORTS[port].envVar;
+    const provider = value[key];
+    if (providerKind(port, provider) === "fake") {
       ctx.addIssue({
         code: "custom",
         path: [key],
-        message: `${key} không được là "${mockValue}" (adapter giả) khi APP_ENV=${value.APP_ENV}`,
+        message: `${key} không được là "${provider}" (adapter giả) khi APP_ENV=${value.APP_ENV}`,
       });
     }
   }

@@ -244,12 +244,9 @@ describe("parseEnv: biến để trống", () => {
     "CAPTCHA_PROVIDER",
     "STORAGE_PROVIDER",
     "NOTIFIER_PROVIDER",
-  ])(
-    "biến luôn bắt buộc %s để trống vẫn bị từ chối ở local",
-    (key) => {
-      expect(() => parseEnv(baseEnv({ [key]: "" }))).toThrow();
-    },
-  );
+  ])("biến luôn bắt buộc %s để trống vẫn bị từ chối ở local", (key) => {
+    expect(() => parseEnv(baseEnv({ [key]: "" }))).toThrow();
+  });
 
   it("adapter giả vẫn bị từ chối ở production dù các biến khác để trống", () => {
     expect(() => parseEnv(productionEnv({ SMS_PROVIDER: "console", CRON_SECRET: "" }))).toThrow(

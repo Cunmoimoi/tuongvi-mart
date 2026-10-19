@@ -53,7 +53,9 @@ export function createNetworkGuard() {
   const calls: string[] = [];
   const guardedFetch: typeof fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
-    calls.push(`${init?.method ?? "GET"} ${url} ${typeof init?.body === "string" ? init.body : ""}`);
+    calls.push(
+      `${init?.method ?? "GET"} ${url} ${typeof init?.body === "string" ? init.body : ""}`,
+    );
     throw new Error("Test không cho phép gọi mạng");
   };
   return { fetch: guardedFetch, calls };
@@ -107,9 +109,5 @@ export function outgoingTexts(
   sink: { lines: readonly string[] },
   network: { calls: readonly string[] },
 ): string[] {
-  return [
-    ...sink.lines,
-    ...network.calls,
-    ...(outcome.ok ? [] : errorTexts(outcome.error)),
-  ];
+  return [...sink.lines, ...network.calls, ...(outcome.ok ? [] : errorTexts(outcome.error))];
 }

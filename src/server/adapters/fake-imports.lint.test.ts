@@ -38,9 +38,15 @@ describe("ESLint cấm import adapter giả ngoài index.ts của port và test"
       "src/server/modules/orders/service.ts",
       'export { createMemoryStorage } from "@/server/adapters/storage/fakes/memory";\n',
     ],
-    ["src/server/modules/orders/service.ts", 'export * from "@/server/adapters/captcha/fakes/always-pass";\n'],
+    [
+      "src/server/modules/orders/service.ts",
+      'export * from "@/server/adapters/captcha/fakes/always-pass";\n',
+    ],
     ["src/server/modules/orders/service.ts", 'import "@/server/adapters/notifier/fakes";\n'],
-    ["scripts/seed-local.ts", 'import { createFakePayment } from "../src/server/adapters/payment/fakes/fake";\n'],
+    [
+      "scripts/seed-local.ts",
+      'import { createFakePayment } from "../src/server/adapters/payment/fakes/fake";\n',
+    ],
   ])("%s: báo lỗi với %j", async (filePath, code) => {
     const messages = await ruleMessages(filePath, code);
     expect(messages).toHaveLength(1);
@@ -53,7 +59,10 @@ describe("ESLint cấm import adapter giả ngoài index.ts của port và test"
       "src/server/adapters/sms/index.ts",
       'import { createConsoleSms } from "@/server/adapters/sms/fakes/console";\n',
     ],
-    ["src/server/adapters/sms/fakes/console.test.ts", 'import { createConsoleSms } from "./console";\n'],
+    [
+      "src/server/adapters/sms/fakes/console.test.ts",
+      'import { createConsoleSms } from "./console";\n',
+    ],
     [
       "src/server/adapters/selection.test.ts",
       'import { createConsoleSms } from "@/server/adapters/sms/fakes/console";\n',

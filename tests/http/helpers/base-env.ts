@@ -15,12 +15,14 @@ export const BASE_ENV: Record<string, string> = {
   PAYMENT_PROVIDER: "sepay",
   SMS_PROVIDER: "esms",
   STORAGE_PROVIDER: "supabase",
+  NOTIFIER_PROVIDER: "telegram",
+  OWNER_ALERT_TELEGRAM_BOT_TOKEN: "test-telegram-bot-token",
+  OWNER_ALERT_TELEGRAM_CHAT_ID: "-1001234567890",
   SMS_HOOK_SECRET: "test-sms-hook-secret",
   TURNSTILE_SECRET_KEY: "test-turnstile-secret",
   HANDOVER_SECRET: "test-handover-secret",
   VIEW_TOKEN_PEPPER: "test-pepper",
   CRON_SECRET: "test-cron-secret",
-  OWNER_ALERT_CHANNEL: "",
 };
 
 // Có cấu hình đầy đủ: các domain ngoài phải xuất hiện trong CSP.
