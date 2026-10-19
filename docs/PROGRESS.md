@@ -20,7 +20,7 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.6 | Audit log                    | Đã merge   | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
 | T0.7 | CI                           | Đã merge   | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; có 1 ngoại lệ audit (`braces`), xem "Việc treo" |
 | T0.8 | Bộ component giao diện       | Đang làm   | #14, #15 | Chia hai phần: A (tokens, font, component cơ bản, AppImage, `/dev/ui`) đã merge ở #14, icon `lucide-react` ở #15; B (khung storefront: header, sidebar, footer...) chưa làm, làm sau T0.9. Xem "Quyết định đã chốt (T0.8 phần A)" |
-| T0.9 | Khung adapter (Switchboard)  | Đang chờ PR |     | `src/server/adapters/*`; xem "Quyết định đã chốt (T0.9)" |
+| T0.9 | Khung adapter (Switchboard)  | Đang chờ PR | #16 | `src/server/adapters/*`; xem "Quyết định đã chốt (T0.9)" |
 
 Ngoài roadmap:
 
