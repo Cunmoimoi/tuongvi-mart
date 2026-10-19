@@ -2,6 +2,12 @@
 
 Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết từng task nằm ở `docs/ROADMAP.md`.
 
+## Bàn giao nhanh
+
+- **Task kế tiếp**: T0.8 phần B (khung storefront, khung admin, Card/Pagination/ConfirmDialog), rồi **Cổng duyệt 1**, rồi T1.1. T0.9 làm trước T0.8 phần B theo yêu cầu của chủ dự án (19/10/2026); hai task không phụ thuộc nhau.
+- **Số test sau T0.9**: unit (`pnpm test`) 957 test / 43 file (trước T0.9: 408 / 28, thêm 549 test, 15 file); `pnpm test:http` 37; `pnpm test:int` 48.
+- **Chủ dự án cần làm trên máy**: thêm `NOTIFIER_PROVIDER=noop` vào `.env.local` (biến mới, bắt buộc; thiếu thì `pnpm dev` báo lỗi cấu hình ở mọi trang). Soát diff `.env.example` của PR T0.9 (Claude Code sửa bằng lệnh, không đọc file, N44).
+
 ## Giai đoạn 0
 
 | Mã   | Tên                          | Trạng thái | PR  | Ghi chú                                                      |
@@ -13,8 +19,8 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 | T0.5 | Proxy (middleware) và headers bảo mật | Đã merge   | #8  | `src/proxy.ts`, `src/server/security/headers.ts`; xem "Quyết định đã chốt (T0.5)" |
 | T0.6 | Audit log                    | Đã merge   | #11 | `src/server/audit/*`, migration `0002_audit_logs`; xem "Quyết định đã chốt (T0.6)" |
 | T0.7 | CI                           | Đã merge   | #12 | `.github/workflows/ci.yml`; xem "Quyết định đã chốt (T0.7)"; có 1 ngoại lệ audit (`braces`), xem "Việc treo" |
-| T0.8 | Bộ component giao diện       | Đang làm   | #14 | Chia hai phần: A (tokens, font, component cơ bản, AppImage, `/dev/ui`) đang chờ PR; B (khung storefront: header, sidebar, footer...) chưa làm. Xem "Quyết định đã chốt (T0.8 phần A)" |
-| T0.9 | Khung adapter (Switchboard)  | Chưa làm   |     |                                                              |
+| T0.8 | Bộ component giao diện       | Đang làm   | #14, #15 | Chia hai phần: A (tokens, font, component cơ bản, AppImage, `/dev/ui`) đã merge ở #14, icon `lucide-react` ở #15; B (khung storefront: header, sidebar, footer...) chưa làm, làm sau T0.9. Xem "Quyết định đã chốt (T0.8 phần A)" |
+| T0.9 | Khung adapter (Switchboard)  | Đang chờ PR |     | `src/server/adapters/*`; xem "Quyết định đã chốt (T0.9)" |
 
 Ngoài roadmap:
 
@@ -73,6 +79,21 @@ Ngoài roadmap:
 - Vitest chia project `server` và `ui` (N41); `pnpm check` chạy cả hai.
 - Đã kiểm trên trình duyệt (Browser pane, `pnpm dev -p 3100`): Console không có lỗi CSP; font Be Vietnam Pro tải đủ các trọng lượng; không cuộn ngang ở 430px; hộp thoại là bottom sheet ở mobile và modal giữa ở desktop; focus nhìn thấy được. Chưa có Playwright nên chưa có ảnh chụp tự động.
 
+## Quyết định đã chốt (T0.9)
+
+- Cấu trúc `src/server/adapters/<port>/`: `index.ts` (nơi duy nhất chọn adapter, có `selectXAdapter(config, deps)` để test và `getX()` cho code nghiệp vụ), `port.ts` (interface và kiểm tra dùng chung), adapter thật `<tên>.ts`, adapter giả `fakes/<tên>.ts`. Bảng tên nhà cung cấp và loại thật/giả ở `adapters/providers.ts`; hàm chọn chung ở `adapters/select.ts` (N43). AuthPort để T1.1.
+- 5 port: payment (`sepay` / `fake`), sms (`esms` tên giữ chỗ Q6 / `console`), storage (`supabase` / `memory`, bucket `incoming` riêng tư và `media` công khai, chưa có pipeline), captcha (`turnstile` / `always-pass`), notifier (`telegram` / `noop`). Cả 5 adapter thật ném `NotImplementedError` (mới, trong `server/lib/errors.ts`) ở mọi phương thức.
+- Adapter giả bị chặn ngoài local/test ở ba lớp: `env.ts`, `selectAdapter` (danh sách cho phép), factory của adapter giả. ESLint `local/no-fake-adapter-import` (rule mới trong `eslint-rules/`) chỉ cho `index.ts` của chính port và test import adapter giả.
+- `env.ts`: `*_PROVIDER` chỉ nhận tên trong bảng; thêm `NOTIFIER_PROVIDER` (bắt buộc mọi môi trường), `OWNER_ALERT_TELEGRAM_BOT_TOKEN`, `OWNER_ALERT_TELEGRAM_CHAT_ID` (bắt buộc ở staging/production); bỏ `OWNER_ALERT_CHANNEL` (N44, N45). CI thêm `NOTIFIER_PROVIDER: noop`.
+- Test (ROADMAP T0.9, nghiệm thu):
+  - (a) `adapters/selection.test.ts`: ma trận 5 port × 2 nhà cung cấp × 4 `APP_ENV` (40 tổ hợp), tên lạ (`mock`, `FAKE`, `__proto__`...) bị từ chối, adapter thật thiếu biến bị từ chối chứ không chuyển sang adapter giả.
+  - (b) staging/production chọn adapter giả: từ chối ở `env.ts` (`selection.test.ts`, `env.test.ts`) và ở hàm chọn (khớp đúng thông điệp của hàm chọn, nên gỡ lớp này thì đỏ dù lớp 3 vẫn chặn).
+  - (c) `adapters/scan.test.ts`: quét thư mục, đối chiếu file với bảng; mọi phương thức của adapter "not-implemented" phải ném `NotImplementedError` ở cả 4 `APP_ENV`; adapter "implemented" phải có file test riêng; port thêm phương thức mà bảng gọi thử chưa có thì typecheck đỏ.
+  - (d) adapter giả nạp được ở local và test (`selection.test.ts`).
+  - Hợp đồng chung `adapters/<port>/contract.test.ts` chạy cho mọi adapter; test riêng cho từng adapter giả; `notifier/port.test.ts` (che SĐT, địa chỉ, khóa nhạy cảm); `storage/port.test.ts` (bucket, đường dẫn); `fake-imports.lint.test.ts` (chạy ESLint thật).
+- Đã cố tình phá rồi khôi phục (không commit): `sepay.verifyWebhook` trả `{ ok: true }` → 20 test đỏ (4 ở test quét, 16 ở hợp đồng payment); gỡ lớp 2 trong `selectAdapter` → 10 test đỏ; gỡ kiểm adapter giả trong `env.ts` → 22 test đỏ; gỡ tự chặn trong factory `sms/console` → 4 test đỏ; thêm file `sms/vnpt.ts` chưa đăng ký → test quét đỏ; `export ... from` adapter giả trong `src/server/dev-ui.ts` → `pnpm lint` báo lỗi.
+- Không thêm dependency, không gọi mạng (test truyền `fetch` giả và kiểm không có request nào).
+
 ## Quyết định đã chốt (T0.6)
 
 - Bảng `app.audit_logs` (migration `0002_audit_logs`) đúng DATA_MODEL mục 9, có thêm các `CHECK` định dạng; `app.enable_app_rls` + `app.make_append_only`: `app_runtime` chỉ SELECT, INSERT.
@@ -124,3 +145,9 @@ Ngoài roadmap:
 
 - `minimum_password_length = 8` trong `supabase/config.toml` (mặc định của CLI là 6): làm ở T1.2.
 - Câu hỏi mở Q1–Q14 trong mục "Câu hỏi mở" của `docs/README.md`; Q5 (ngân hàng) bắt buộc trước giai đoạn 3, Q6 (SMS OTP) bắt buộc trước khi mở bán.
+
+- T0.9: adapter SMS thật đang mang tên giữ chỗ `esms` và chưa có biến khóa API trong `env.ts`; chốt Q6 thì đổi tên (file, `providers.ts`, CI, test) và thêm biến bắt buộc ở staging/production.
+- T0.9: staging/production bắt buộc Telegram (`OWNER_ALERT_TELEGRAM_*`), nên phải tạo bot trước khi dựng staging (đã thêm vào "Việc bạn cần làm" trong `docs/README.md`).
+- T0.9: logger chung chưa che địa chỉ (SECURITY mục "Log và dữ liệu cá nhân" yêu cầu không log địa chỉ đầy đủ); hiện chỉ notifier che. Khi có dữ liệu địa chỉ (T1.4) cân nhắc che theo khóa trong `sanitizeForLog`, lưu ý hàm này cũng dùng cho audit `before`/`after` (N32), cần chủ dự án quyết.
+- T0.9: `sms/console` không in OTP khi `APP_ENV=test`, nên E2E đăng nhập bằng OTP (T1.x) cần cách khác để lấy mã (ví dụ hook test riêng), không được nới adapter này.
+- T0.9: chưa có code nghiệp vụ nào gọi `getPayment()`, `getSms()`... Webhook SePay (giai đoạn 3) gọi `getPayment().verifyWebhook` trước `parseWebhook`; nơi gọi captcha coi mọi lỗi là "không qua".

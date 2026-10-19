@@ -130,12 +130,13 @@ Trình duyệt không gọi trực tiếp Supabase (trừ tải ảnh public). M
 │       ├── security/ headers.ts                 # hàm thuần dựng CSP + header bảo mật; proxy.ts gọi
 │       ├── audit/ service.ts  actions.ts  payload.ts  request-context.ts  repo.ts
 │       │                                        # record() dùng chung cho mọi module, xem mục 12
-│       ├── adapters/                            # "Switchboard"
-│       │   ├── payment/ index.ts  sepay.ts  fake.ts
-│       │   ├── sms/ index.ts  console.ts  esms.ts (hoặc nhà cung cấp được chọn)
-│       │   ├── storage/ index.ts  supabase.ts  memory.ts
-│       │   ├── captcha/ index.ts  turnstile.ts  always-pass.ts
-│       │   └── notifier/ index.ts  noop.ts  telegram.ts (tùy chọn)
+│       ├── adapters/                            # "Switchboard", xem mục 9
+│       │   ├── providers.ts  select.ts          # bảng nhà cung cấp (thật/giả); hàm chọn đóng cửa khi lỗi
+│       │   ├── payment/ index.ts  port.ts  sepay.ts  fakes/fake.ts
+│       │   ├── sms/ index.ts  port.ts  esms.ts (tên giữ chỗ, Q6)  fakes/console.ts
+│       │   ├── storage/ index.ts  port.ts  supabase.ts  fakes/memory.ts
+│       │   ├── captcha/ index.ts  port.ts  turnstile.ts  fakes/always-pass.ts
+│       │   └── notifier/ index.ts  port.ts  telegram.ts  fakes/noop.ts
 │       └── modules/
 │           ├── catalog/  pricing/  inventory/  fulfillment/
 │           ├── checkout/  orders/  payments/  handover/  refunds/
@@ -237,22 +238,40 @@ Mỗi route cron kiểm tra header `Authorization: Bearer ${CRON_SECRET}` bằng
 
 ## 9. Switchboard (adapter) theo kiểu đóng cửa khi lỗi
 
-Mỗi dịch vụ ngoài có một interface (port) và nhiều adapter. `adapters/<port>/index.ts` chọn adapter dựa trên biến môi trường đã được `env.ts` kiểm tra.
+Mỗi dịch vụ ngoài có một interface (port, `adapters/<port>/port.ts`), một adapter thật (`adapters/<port>/<tên>.ts`) và một adapter giả (`adapters/<port>/fakes/<tên>.ts`). `adapters/providers.ts` là bảng duy nhất liệt kê tên nhà cung cấp và loại (thật/giả); `adapters/<port>/index.ts` là nơi duy nhất chọn adapter, theo biến môi trường đã được `env.ts` kiểm tra.
 
 ```ts
-// ví dụ: src/server/adapters/sms/index.ts
-import "server-only";
-import { env } from "@/server/env";
-export const sms: SmsPort =
-  env.SMS_PROVIDER === "console" ? consoleSms : createEsmsAdapter(env.ESMS_API_KEY!, env.ESMS_SECRET!);
+// src/server/adapters/sms/index.ts (rút gọn)
+export const SMS_ADAPTERS: AdapterRegistry<"sms", SmsAdapterEnv, SmsPort> = {
+  esms: { status: "not-implemented", create: () => createEsmsSms() },
+  console: {
+    status: "implemented",
+    create: (config, deps) => createConsoleSms({ appEnv: config.APP_ENV, write: deps.write }),
+  },
+};
+export function selectSmsAdapter(config: SmsAdapterEnv, deps: AdapterDeps = {}): SmsPort {
+  return selectAdapter("sms", SMS_ADAPTERS, config.SMS_PROVIDER, config, deps);
+}
+export function getSms(): SmsPort; // code nghiệp vụ gọi hàm này; chọn một lần theo `env`
 ```
 
-Quy tắc:
-- `env.ts` từ chối `SMS_PROVIDER=console`, `PAYMENT_PROVIDER=fake`, `CAPTCHA_PROVIDER=always-pass`, `STORAGE_PROVIDER=memory` khi `APP_ENV=production` hoặc `staging`.
-- Adapter chưa làm xong phải `throw new NotImplementedError()`, không bao giờ trả `success: true` giả.
-- Không có "tự động chuyển về mock khi thiếu key". Thiếu key ở production thì ứng dụng không khởi động.
+| Port (phương thức) | Biến chọn | Adapter thật | Adapter giả |
+|---|---|---|---|
+| `PaymentProviderPort` (verifyWebhook, parseWebhook, listTransactions) | `PAYMENT_PROVIDER` | `sepay` | `fake` |
+| `SmsPort` (sendOtp, sendMessage) | `SMS_PROVIDER` | `esms` (tên giữ chỗ tới khi chốt Q6) | `console` |
+| `StoragePort` (createSignedUpload, getPublicUrl, delete) | `STORAGE_PROVIDER` | `supabase` | `memory` |
+| `CaptchaPort` (verify) | `CAPTCHA_PROVIDER` | `turnstile` | `always-pass` |
+| `NotifierPort` (notifyOwner) | `NOTIFIER_PROVIDER` | `telegram` | `noop` |
+| `AuthPort` (bọc Supabase Auth) | | làm ở T1.1 | |
 
-Các port: `PaymentProviderPort` (verifyWebhook, parseWebhook, listTransactions), `SmsPort` (sendOtp, sendMessage), `StoragePort` (createSignedUpload cho bucket `incoming`, download, putPrivate, putPublic, getPublicUrl, delete), `CaptchaPort` (verify), `NotifierPort` (notifyOwner), `AuthPort` (bọc Supabase Auth).
+Quy tắc:
+- Adapter giả chỉ nạp được khi `APP_ENV` là `local` hoặc `test`, chặn ở ba lớp: (1) `env.ts` không cho ứng dụng khởi động khi staging/production cấu hình adapter giả; (2) `selectAdapter` (`adapters/select.ts`) từ chối lần nữa theo danh sách CHO PHÉP `local`/`test`, dù cấu hình không đi qua `env.ts`; (3) factory của từng adapter giả tự gọi `assertFakeAdapterAllowed`. Mã adapter giả vẫn nằm trong bản build (index.ts import tĩnh) nhưng không tạo được ngoài local/test.
+- Adapter giả chỉ được import từ `index.ts` của chính port đó và từ test (ESLint `local/no-fake-adapter-import`). Code nghiệp vụ dùng `getPayment()`, `getSms()`, `getStorage()`, `getCaptcha()`, `getNotifier()`.
+- Adapter chưa làm xong (`status: "not-implemented"` trong bảng của index.ts) ném `NotImplementedError` (`server/lib/errors.ts`) ở MỌI phương thức, không bao giờ trả thành công hay giá trị rỗng giả.
+- Không có "tự động chuyển về mock khi thiếu key". Adapter thật đã chọn mà thiếu biến của nó thì hàm chọn ném `AdapterConfigError`; thiếu key ở staging/production thì ứng dụng không khởi động. Giá trị `*_PROVIDER` không có trong bảng thì `env.ts` từ chối.
+- Hợp đồng chung (`adapters/<port>/contract.test.ts`, chạy cho mọi adapter của port ở mọi `APP_ENV` adapter được phép): lỗi ném ra không chứa khóa hay URL có token; SMS không in OTP khi `APP_ENV` khác `local`, SĐT luôn bị che; notifier dựng nội dung bằng `formatOwnerAlert` (che SĐT như logger, địa chỉ chỉ còn phường/xã và tỉnh, bỏ khóa nhạy cảm); storage chỉ cho bucket `incoming` nhận tải lên, bucket riêng tư không có URL công khai, đường dẫn object được kiểm (`assertSafeObjectPath`); webhook không ký, ký sai, quá 300 giây không bao giờ hợp lệ.
+- `adapters/scan.test.ts` quét thư mục: file adapter không có trong bảng, adapter "not-implemented" có phương thức không ném `NotImplementedError`, hay adapter "implemented" không có file test riêng đều làm CI đỏ.
+- StoragePort ở T0.9 có hai bucket: `incoming` (riêng tư) và `media` (công khai). Bucket `normalized` và các thao tác `download`, `putPrivate`, `putPublic` thêm cùng pipeline ảnh ở T2.2 (mục 15).
 
 ## 10. Môi trường và biến môi trường
 
@@ -269,7 +288,7 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
 | `SEPAY_WEBHOOK_SECRET` | server | HMAC secret |
 | `SEPAY_API_TOKEN` | server | cho đối soát |
 | `PAYEE_BANK_BIN`, `PAYEE_BANK_NAME`, `PAYEE_ACCOUNT_NO`, `PAYEE_ACCOUNT_NAME` | server | tài khoản nhận tiền; chỉ đổi bằng cách đổi env + redeploy |
-| `PAYMENT_PROVIDER`, `SMS_PROVIDER`, `CAPTCHA_PROVIDER`, `STORAGE_PROVIDER` | server | chọn adapter |
+| `PAYMENT_PROVIDER`, `SMS_PROVIDER`, `CAPTCHA_PROVIDER`, `STORAGE_PROVIDER`, `NOTIFIER_PROVIDER` | server | chọn adapter; chỉ nhận tên có trong `adapters/providers.ts` (mục 9) |
 | `SMS_HOOK_SECRET` | server | xác thực request từ Supabase Send SMS Hook |
 | `TURNSTILE_SECRET_KEY` | server | |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | public | khóa công khai, được phép |
@@ -277,7 +296,7 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
 | `VIEW_TOKEN_PEPPER` | server | khóa HMAC để băm view token của khách vãng lai |
 | `CRON_SECRET` | server | |
 | `SENTRY_DSN` | server + public | DSN không phải secret |
-| `OWNER_ALERT_*` | server | kênh cảnh báo cho chủ shop (tùy chọn) |
+| `OWNER_ALERT_TELEGRAM_BOT_TOKEN`, `OWNER_ALERT_TELEGRAM_CHAT_ID` | server | kênh cảnh báo cho chủ shop qua Telegram; bắt buộc ở staging/production vì notifier `noop` là adapter giả |
 
 `env.ts` phải có test: thiếu biến bắt buộc hoặc cấu hình mock ở production thì `parse` báo lỗi.
 
