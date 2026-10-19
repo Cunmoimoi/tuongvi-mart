@@ -1,16 +1,19 @@
 @import "tailwindcss";
 
 /*
- * Design tokens theo docs/UI_SPEC.md mục 2.1 (màu) và 2.3 (bo góc, khác).
- * Font chữ (Be Vietnam Pro qua next/font) sẽ cấu hình ở task T0.8.
+ * Design tokens theo docs/UI_SPEC.md mục 2: màu (2.1), chữ (2.2), bo góc, bóng, chuyển động (2.3).
+ * Mọi component dùng token ở đây, không viết màu hay cỡ chữ cố định ở chỗ dùng.
  */
 @theme {
+  /* --- Màu (2.1) --- */
   --color-brand: #15803d;
   --color-brand-dark: #0d4022;
 
   --color-primary: #16a34a;
   --color-primary-hover: #15803d;
   --color-primary-soft: #dcfce7;
+  /* Hover của nền primary-soft (green-200): UI_SPEC chưa nêu, dùng cho Button "soft". */
+  --color-primary-soft-hover: #bbf7d0;
   --color-primary-softer: #f0fdf4;
 
   --color-sale: #ea580c;
@@ -20,6 +23,8 @@
   --color-badge-discount-fg: #1f2937;
 
   --color-danger: #dc2626;
+  /* Hover của nền danger (red-700): UI_SPEC chưa nêu, dùng cho Button "danger". */
+  --color-danger-hover: #b91c1c;
   --color-success: #15803d;
   --color-success-soft: #dcfce7;
 
@@ -33,15 +38,175 @@
   --color-page-bg: #f3f4f6;
   --color-overlay: rgb(0 0 0 / 0.4);
 
+  /* Vòng focus: dùng màu `brand` (tương phản 5:1 trên nền trắng) thay vì `primary` (3,3:1). */
+  --color-focus: #15803d;
+  /* Vòng focus trên nền tối/brand (header, footer đáy). */
+  --color-focus-on-dark: #ffffff;
+
+  /* --- Bo góc (2.3): 4 badge/ảnh nhỏ, 8 thẻ/khối, 12 banner, 9999 nút/chip/ô tìm kiếm --- */
   --radius-badge: 4px;
   --radius-card: 8px;
   --radius-banner: 12px;
+  --radius-pill: 9999px;
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  /* --- Bóng (2.3): thẻ phẳng, chỉ dropdown và ô tài khoản có bóng --- */
+  --shadow-dropdown: 0 8px 24px rgb(0 0 0 / 0.12);
+  --shadow-account: 0 1px 3px rgb(0 0 0 / 0.08);
+
+  /* --- Chữ (2.2): cỡ / độ đậm / line-height theo vai trò --- */
+  --text-page-title: 28px;
+  --text-page-title--line-height: 36px;
+  --text-page-title--font-weight: 600;
+
+  --text-category-title: 20px;
+  --text-category-title--line-height: 28px;
+  --text-category-title--font-weight: 600;
+
+  --text-product-title: 18px;
+  --text-product-title--line-height: 26px;
+  --text-product-title--font-weight: 600;
+
+  --text-price-xl: 28px;
+  --text-price-xl--line-height: 36px;
+  --text-price-xl--font-weight: 700;
+
+  --text-block-title: 18px;
+  --text-block-title--line-height: 26px;
+  --text-block-title--font-weight: 700;
+
+  --text-nav-link: 15px;
+  --text-nav-link--line-height: 22px;
+  --text-nav-link--font-weight: 500;
+
+  --text-sidebar-item: 14px;
+  --text-sidebar-item--line-height: 18px;
+  --text-sidebar-item--font-weight: 400;
+
+  --text-card-name: 14px;
+  --text-card-name--line-height: 18px;
+  --text-card-name--font-weight: 400;
+
+  --text-price-card: 16px;
+  --text-price-card--line-height: 24px;
+  --text-price-card--font-weight: 700;
+
+  --text-price-sub: 11px;
+  --text-price-sub--line-height: 16px;
+  --text-price-sub--font-weight: 400;
+
+  --text-button: 15px;
+  --text-button--line-height: 22px;
+  --text-button--font-weight: 600;
+
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 500;
+
+  /* --- Chuyển động (2.3): 150-200ms --- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Font Be Vietnam Pro tự host qua next/font (src/app/layout.tsx đặt biến --font-be-vietnam-pro).
+ * `inline` để Tailwind ghi thẳng giá trị var(...) vào utility thay vì tạo biến trung gian.
+ */
+@theme inline {
+  --font-sans:
+    var(--font-be-vietnam-pro), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    sans-serif;
 }
 
 body {
   background-color: var(--color-page-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
+}
+
+/* Vòng focus nhìn thấy được cho mọi phần tử tương tác (bàn phím), dùng chung cho mọi component. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Biến thể cho nền tối (header brand, footer đáy). */
+@utility focus-ring-on-dark {
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-on-dark);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * Vùng bấm tối thiểu 44x44 (mobile) / 40x40 (desktop) (UI_SPEC 2.3) cho nút có hình nhỏ hơn: phần
+ * tử giả phủ rộng vùng bấm mà không đổi kích thước hiển thị. Phần tử cần `position: relative`.
+ */
+@utility hit-area {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 2.75rem);
+    height: max(100%, 2.75rem);
+    transform: translate(-50%, -50%);
+  }
+  @media (min-width: 768px) {
+    &::after {
+      width: max(100%, 2.5rem);
+      height: max(100%, 2.5rem);
+    }
+  }
+}
+
+/* Khóa cuộn trang phía sau khi có hộp thoại modal (<dialog>) đang mở. */
+html:has(dialog[open]:modal) {
+  overflow: hidden;
+}
+
+@keyframes dialog-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes drawer-slide-from-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes drawer-slide-from-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Tôn trọng `prefers-reduced-motion` (UI_SPEC 2.3): bỏ chuyển động, giữ nguyên trạng thái cuối. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

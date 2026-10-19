@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 400" width="1560" height="400" role="img" aria-label="Banner chưa có">
+  <rect width="1560" height="400" fill="#f0fdf4"/>
+  <g fill="none" stroke="#bbf7d0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="690" y="130" width="180" height="140" rx="16"/>
+    <path d="m700 250 50-60 40 44 24-28 56 44"/>
+  </g>
+</svg>
