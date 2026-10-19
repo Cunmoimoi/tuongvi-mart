@@ -88,3 +88,29 @@ export function isAppError(value: unknown): value is AppError {
 export function toAppError(error: unknown): AppError {
   return isAppError(error) ? error : new AppError("INTERNAL", undefined, { cause: error });
 }
+
+/**
+ * Adapter thật chưa làm xong (ARCHITECTURE mục 9): mọi phương thức ném lỗi này, không bao giờ trả
+ * thành công hay giá trị rỗng giả. `feature` có dạng `<port>/<adapter>.<phương thức>`, không bao giờ
+ * chứa cấu hình của adapter (khóa, URL có token). Ra tới client chỉ còn INTERNAL 500 qua `toAppError`.
+ */
+export class NotImplementedError extends Error {
+  readonly feature: string;
+
+  constructor(feature: string) {
+    super(`Chưa hiện thực: ${feature}`);
+    this.name = "NotImplementedError";
+    this.feature = feature;
+  }
+}
+
+/**
+ * Cấu hình adapter không dùng được: nhà cung cấp lạ, adapter giả ngoài local/test, thiếu biến bắt
+ * buộc. Thông điệp chỉ nêu tên biến, không bao giờ nêu giá trị.
+ */
+export class AdapterConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdapterConfigError";
+  }
+}

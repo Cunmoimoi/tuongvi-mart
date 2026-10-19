@@ -19,6 +19,9 @@ function baseEnv(overrides: Record<string, string | undefined> = {}) {
     SMS_PROVIDER: "console",
     CAPTCHA_PROVIDER: "always-pass",
     STORAGE_PROVIDER: "memory",
+    NOTIFIER_PROVIDER: "noop",
+    OWNER_ALERT_TELEGRAM_BOT_TOKEN: "123456789:telegram-bot-token",
+    OWNER_ALERT_TELEGRAM_CHAT_ID: "-1001234567890",
     SMS_HOOK_SECRET: "sms-hook-secret",
     TURNSTILE_SECRET_KEY: "turnstile-secret",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "turnstile-site-key",
@@ -36,6 +39,7 @@ function productionEnv(overrides: Record<string, string | undefined> = {}) {
     SMS_PROVIDER: "esms",
     CAPTCHA_PROVIDER: "turnstile",
     STORAGE_PROVIDER: "supabase",
+    NOTIFIER_PROVIDER: "telegram",
     ...overrides,
   });
 }
@@ -59,6 +63,7 @@ describe("parseEnv", () => {
         SMS_PROVIDER: "esms",
         CAPTCHA_PROVIDER: "turnstile",
         STORAGE_PROVIDER: "supabase",
+        NOTIFIER_PROVIDER: "telegram",
       }),
     );
     expect(env.APP_ENV).toBe("staging");
@@ -89,6 +94,60 @@ describe("parseEnv", () => {
     expect(() => parseEnv(productionEnv({ STORAGE_PROVIDER: "memory" }))).toThrow();
   });
 
+  it("production mà NOTIFIER_PROVIDER=noop thì ném lỗi", () => {
+    expect(() => parseEnv(productionEnv({ NOTIFIER_PROVIDER: "noop" }))).toThrow(
+      /NOTIFIER_PROVIDER/,
+    );
+  });
+
+  // Danh sách viết tay, độc lập với bảng providers.ts: lỡ ai chuyển một adapter giả sang "real"
+  // trong bảng thì test này vẫn đỏ.
+  it.each([
+    ["PAYMENT_PROVIDER", "fake"],
+    ["SMS_PROVIDER", "console"],
+    ["CAPTCHA_PROVIDER", "always-pass"],
+    ["STORAGE_PROVIDER", "memory"],
+    ["NOTIFIER_PROVIDER", "noop"],
+  ])("staging và production từ chối %s=%s", (key, value) => {
+    for (const appEnv of ["staging", "production"]) {
+      expect(() => parseEnv(productionEnv({ APP_ENV: appEnv, [key]: value }))).toThrow(
+        new RegExp(`${key}.*adapter giả`),
+      );
+    }
+  });
+
+  it("production thiếu OWNER_ALERT_TELEGRAM_BOT_TOKEN hoặc OWNER_ALERT_TELEGRAM_CHAT_ID thì ném lỗi", () => {
+    expect(() => parseEnv(productionEnv({ OWNER_ALERT_TELEGRAM_BOT_TOKEN: undefined }))).toThrow(
+      /OWNER_ALERT_TELEGRAM_BOT_TOKEN/,
+    );
+    expect(() => parseEnv(productionEnv({ OWNER_ALERT_TELEGRAM_CHAT_ID: undefined }))).toThrow(
+      /OWNER_ALERT_TELEGRAM_CHAT_ID/,
+    );
+  });
+
+  it("thiếu NOTIFIER_PROVIDER thì ném lỗi ở mọi môi trường (không tự chọn noop)", () => {
+    for (const appEnv of ["local", "test"]) {
+      expect(() => parseEnv(baseEnv({ APP_ENV: appEnv, NOTIFIER_PROVIDER: undefined }))).toThrow(
+        /NOTIFIER_PROVIDER/,
+      );
+    }
+    expect(() => parseEnv(productionEnv({ NOTIFIER_PROVIDER: undefined }))).toThrow(
+      /NOTIFIER_PROVIDER/,
+    );
+  });
+
+  it.each([
+    ["PAYMENT_PROVIDER", "mock"],
+    ["PAYMENT_PROVIDER", "Fake"],
+    ["SMS_PROVIDER", "console "],
+    ["SMS_PROVIDER", "twilio"],
+    ["CAPTCHA_PROVIDER", "recaptcha"],
+    ["STORAGE_PROVIDER", "s3"],
+    ["NOTIFIER_PROVIDER", "email"],
+  ])("%s=%j không có trong bảng nhà cung cấp thì ném lỗi, kể cả ở local", (key, value) => {
+    expect(() => parseEnv(baseEnv({ [key]: value }))).toThrow(new RegExp(key));
+  });
+
   it("staging mà SMS_PROVIDER=console thì ném lỗi", () => {
     expect(() =>
       parseEnv(
@@ -97,6 +156,7 @@ describe("parseEnv", () => {
           SMS_PROVIDER: "console",
           CAPTCHA_PROVIDER: "turnstile",
           STORAGE_PROVIDER: "supabase",
+          NOTIFIER_PROVIDER: "telegram",
         }),
       ),
     ).toThrow();
@@ -142,7 +202,8 @@ describe("parseEnv: biến để trống", () => {
     CRON_SECRET: "",
     SENTRY_DSN: "",
     DATABASE_MIGRATION_URL: "",
-    OWNER_ALERT_CHANNEL: "",
+    OWNER_ALERT_TELEGRAM_BOT_TOKEN: "",
+    OWNER_ALERT_TELEGRAM_CHAT_ID: "",
   };
 
   it.each(["local", "test"])("%s: biến tùy chọn để trống được coi là chưa đặt", (appEnv) => {
@@ -152,7 +213,7 @@ describe("parseEnv: biến để trống", () => {
     expect(env.SENTRY_DSN).toBeUndefined();
   });
 
-  it.each(Object.keys(BLANK_OPTIONALS).filter((key) => !/SENTRY|MIGRATION|OWNER/.test(key)))(
+  it.each(Object.keys(BLANK_OPTIONALS).filter((key) => !/SENTRY|MIGRATION/.test(key)))(
     "production: %s để trống vẫn bị từ chối như thiếu",
     (key) => {
       expect(() => parseEnv(productionEnv({ [key]: "" }))).toThrow(new RegExp(key));
@@ -167,18 +228,25 @@ describe("parseEnv: biến để trống", () => {
           SMS_PROVIDER: "esms",
           CAPTCHA_PROVIDER: "turnstile",
           STORAGE_PROVIDER: "supabase",
+          NOTIFIER_PROVIDER: "telegram",
           SEPAY_API_TOKEN: "",
         }),
       ),
     ).toThrow(/SEPAY_API_TOKEN/);
   });
 
-  it.each(["APP_ENV", "APP_URL", "DATABASE_URL", "PAYMENT_PROVIDER", "SMS_PROVIDER"])(
-    "biến luôn bắt buộc %s để trống vẫn bị từ chối ở local",
-    (key) => {
-      expect(() => parseEnv(baseEnv({ [key]: "" }))).toThrow();
-    },
-  );
+  it.each([
+    "APP_ENV",
+    "APP_URL",
+    "DATABASE_URL",
+    "PAYMENT_PROVIDER",
+    "SMS_PROVIDER",
+    "CAPTCHA_PROVIDER",
+    "STORAGE_PROVIDER",
+    "NOTIFIER_PROVIDER",
+  ])("biến luôn bắt buộc %s để trống vẫn bị từ chối ở local", (key) => {
+    expect(() => parseEnv(baseEnv({ [key]: "" }))).toThrow();
+  });
 
   it("adapter giả vẫn bị từ chối ở production dù các biến khác để trống", () => {
     expect(() => parseEnv(productionEnv({ SMS_PROVIDER: "console", CRON_SECRET: "" }))).toThrow(
