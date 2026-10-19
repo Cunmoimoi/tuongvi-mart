@@ -2,14 +2,15 @@ import { inspect } from "node:util";
 import type { Env } from "@/server/env";
 
 // Công cụ dùng chung cho test adapter (src/server/adapters/**). Giá trị bên dưới là giá trị thử,
-// không phải secret thật; mỗi giá trị có chuỗi riêng dễ nhận ra để dò xem có bị lộ ra ngoài không.
+// không phải secret thật. Mỗi giá trị là một chuỗi riêng để dò xem có bị lộ ra ngoài không, và có
+// độ ngẫu nhiên thấp như các giá trị thử khác trong repo để gitleaks không báo nhầm.
 
 export const TEST_SECRETS = {
-  SEPAY_WEBHOOK_SECRET: "whsec-LEAKCHECK-sepay-webhook-0001",
-  SEPAY_API_TOKEN: "apitok-LEAKCHECK-sepay-api-0002",
-  SUPABASE_SECRET_KEY: "sb_secret_LEAKCHECK-supabase-0003",
-  TURNSTILE_SECRET_KEY: "0x4AAAAAAA-LEAKCHECK-turnstile-0004",
-  OWNER_ALERT_TELEGRAM_BOT_TOKEN: "123456789:LEAKCHECK-telegram-bot-0005",
+  SEPAY_WEBHOOK_SECRET: "test-sepay-webhook-secret",
+  SEPAY_API_TOKEN: "test-sepay-api-token",
+  SUPABASE_SECRET_KEY: "test-supabase-secret-key",
+  TURNSTILE_SECRET_KEY: "test-turnstile-secret-key",
+  OWNER_ALERT_TELEGRAM_BOT_TOKEN: "test-telegram-bot-token",
 } as const;
 
 // URL gọi API Telegram chứa nguyên bot token: không bao giờ được xuất hiện trong lỗi hay log.

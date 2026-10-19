@@ -39,7 +39,7 @@ const ALERT: OwnerAlert = {
     note: "Khách nhờ gọi lại số 0901 234 567",
     shippingAddress: "12 Nguyễn Huệ, Phường Sài Gòn, Thành phố Hồ Chí Minh",
     otp: "482913",
-    viewToken: "vt-LEAKCHECK-view-token",
+    viewToken: "test-view-token-value",
   },
 };
 
@@ -48,7 +48,7 @@ const HIDDEN = [
   "0901 234 567",
   "12 Nguyễn Huệ",
   "482913",
-  "vt-LEAKCHECK-view-token",
+  "test-view-token-value",
   ...Object.values(TEST_SECRETS),
   TELEGRAM_URL_WITH_TOKEN,
 ];
@@ -91,7 +91,7 @@ describe("bộ kiểm rò rỉ của hợp đồng notifier", () => {
     };
     const { leaks } = await leaksOf(leaky, sink);
     expect(leaks).toEqual(
-      expect.arrayContaining(["901234567", "12 Nguyễn Huệ", "482913", "vt-LEAKCHECK-view-token"]),
+      expect.arrayContaining(["901234567", "12 Nguyễn Huệ", "482913", "test-view-token-value"]),
     );
   });
 

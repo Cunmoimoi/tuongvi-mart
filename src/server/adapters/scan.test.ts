@@ -219,7 +219,7 @@ describe("adapter giả tự từ chối ở staging và production", () => {
     (["staging", "production"] as const).map((appEnv) => ({ ...entry, appEnv })),
   );
 
-  it.each(cases)("$port/$provider.create (APP_ENV=$appEnv)", ({ port, provider, appEnv }) => {
+  it.each(cases)("factory của $port/$provider (APP_ENV=$appEnv)", ({ port, provider, appEnv }) => {
     const definition = PORT_CASES[port].registry[provider];
     const create = definition?.create as unknown as (
       config: AdapterEnv,
