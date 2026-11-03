@@ -17,6 +17,15 @@ export function isProductionLike(appEnv: AppEnv): boolean {
   return PRODUCTION_LIKE_ENVS.includes(appEnv);
 }
 
+/**
+ * Đang chạy trên bản deploy Vercel (production, preview hay loại môi trường Vercel thêm sau này)?
+ * `VERCEL_ENV` do Vercel tự đặt, không phải do người cấu hình, nên là tín hiệu độc lập với
+ * `APP_ENV`. Chỉ `development` (`vercel dev`, `vercel env pull`) và chưa đặt là máy của lập trình viên.
+ */
+export function isHostedDeployment(vercelEnv: string | undefined): boolean {
+  return vercelEnv !== undefined && vercelEnv !== "" && vercelEnv !== "development";
+}
+
 const rawEnvSchema = z.object({
   APP_ENV: z.enum(APP_ENVS),
   APP_URL: z.url(),
@@ -55,6 +64,9 @@ const rawEnvSchema = z.object({
   // Kênh cảnh báo cho chủ shop khi NOTIFIER_PROVIDER=telegram.
   OWNER_ALERT_TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
   OWNER_ALERT_TELEGRAM_CHAT_ID: z.string().min(1).optional(),
+
+  // Vercel tự đặt; không khai báo trong .env. Dùng để đối chiếu với APP_ENV (isHostedDeployment).
+  VERCEL_ENV: z.string().optional(),
 });
 
 type RawEnv = z.infer<typeof rawEnvSchema>;
@@ -83,6 +95,16 @@ const REQUIRED_ONLY_IN_PRODUCTION_LIKE: readonly (keyof RawEnv)[] = [
 ];
 
 const envSchema = rawEnvSchema.superRefine((value, ctx) => {
+  // Bản deploy mà APP_ENV là local/test (ví dụ chép nhầm .env.local lên Vercel) sẽ mở khóa mọi
+  // adapter giả: không cho khởi động. Adapter giả còn tự kiểm VERCEL_ENV lần nữa (adapters/select.ts).
+  if (!isProductionLike(value.APP_ENV) && isHostedDeployment(value.VERCEL_ENV)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["APP_ENV"],
+      message: `APP_ENV=${value.APP_ENV} không dùng được trên bản deploy Vercel (VERCEL_ENV khác development)`,
+    });
+  }
+
   if (!isProductionLike(value.APP_ENV)) {
     return;
   }

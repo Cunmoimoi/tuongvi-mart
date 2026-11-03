@@ -1,8 +1,14 @@
 import { createHmac } from "node:crypto";
+import { inspect } from "node:util";
 import { describe, expect, it } from "vitest";
 import { createFakePayment } from "@/server/adapters/payment/fakes/fake";
-import type { BankTransaction } from "@/server/adapters/payment/port";
+import type {
+  BankTransaction,
+  PaymentProviderPort,
+  VerifiedWebhook,
+} from "@/server/adapters/payment/port";
 import { AppError } from "@/server/lib/errors";
+import { sanitizeForLog } from "@/server/lib/logger";
 
 // Adapter giả cho local/test: kiểm chữ ký HMAC thật (cùng cách tính với BUSINESS_RULES 5.3, header
 // riêng `x-fake-*`), không có đường nào "cho qua" webhook không ký.
@@ -37,11 +43,43 @@ const PAYLOAD = {
 };
 const BODY = JSON.stringify(PAYLOAD);
 
+/** Webhook đã xác thực bởi chính `adapter`, cách duy nhất để có đầu vào cho `parseWebhook`. */
+async function verified(adapter: PaymentProviderPort, body: string): Promise<VerifiedWebhook> {
+  const result = await adapter.verifyWebhook({ headers: sign(body), rawBody: body });
+  if (!result.ok) {
+    throw new Error(`webhook thử phải hợp lệ, nhận ${result.reason}`);
+  }
+  return result.webhook;
+}
+
+async function parse(body: string): Promise<BankTransaction> {
+  const adapter = payment();
+  return adapter.parseWebhook(await verified(adapter, body));
+}
+
 describe("payment/fake: verifyWebhook", () => {
-  it("chữ ký đúng → hợp lệ", async () => {
-    expect(await payment().verifyWebhook({ headers: sign(BODY), rawBody: BODY })).toStrictEqual({
-      ok: true,
-    });
+  it("chữ ký đúng → hợp lệ, trả webhook đã xác thực (đóng băng, không có thuộc tính nào)", async () => {
+    const result = await payment().verifyWebhook({ headers: sign(BODY), rawBody: BODY });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(Object.isFrozen(result.webhook)).toBe(true);
+      expect(Reflect.ownKeys(result.webhook)).toStrictEqual([]);
+    }
+  });
+
+  // CLAUDE.md bất biến 14: ghi log hay audit kết quả xác thực (việc rất tự nhiên ở route webhook)
+  // không được kéo theo nguyên body.
+  it("log, JSON hay inspect kết quả xác thực không lộ body webhook", async () => {
+    const result = await payment().verifyWebhook({ headers: sign(BODY), rawBody: BODY });
+    const texts = [
+      JSON.stringify(result),
+      JSON.stringify(sanitizeForLog({ result })),
+      inspect(result, { depth: 10, showHidden: true }),
+    ];
+    for (const text of texts) {
+      expect(text).not.toContain("Vietcombank");
+      expect(text).not.toContain("TVM2345ABCD");
+    }
   });
 
   it("thiếu chữ ký hoặc thiếu timestamp → missing-signature", async () => {
@@ -114,8 +152,8 @@ describe("payment/fake: verifyWebhook", () => {
 });
 
 describe("payment/fake: parseWebhook", () => {
-  it("chuẩn hóa thành BankTransaction", () => {
-    expect(payment().parseWebhook(BODY)).toStrictEqual({
+  it("chuẩn hóa thành BankTransaction", async () => {
+    expect(await parse(BODY)).toStrictEqual({
       providerTransactionId: "92704",
       gateway: "Vietcombank",
       occurredAt: new Date("2026-10-19T02:00:00Z"),
@@ -128,8 +166,8 @@ describe("payment/fake: parseWebhook", () => {
     });
   });
 
-  it("code và referenceCode có thể null; transferType out", () => {
-    const tx = payment().parseWebhook(
+  it("code và referenceCode có thể null; transferType out", async () => {
+    const tx = await parse(
       JSON.stringify({ ...PAYLOAD, code: null, referenceCode: null, transferType: "out" }),
     );
     expect(tx.paymentCode).toBeNull();
@@ -147,26 +185,63 @@ describe("payment/fake: parseWebhook", () => {
     ["ngày không có múi giờ", { transactionDate: "2026-10-19 09:00:00" }],
     ["thiếu id", { id: undefined }],
     ["id rỗng", { id: "" }],
-  ])("%s → AppError VALIDATION_FAILED", (_label, patch) => {
-    const body = JSON.stringify({ ...PAYLOAD, ...patch });
-    expect(() => payment().parseWebhook(body)).toThrow(AppError);
-    try {
-      payment().parseWebhook(body);
-    } catch (error) {
-      expect((error as AppError).code).toBe("VALIDATION_FAILED");
-      expect((error as AppError).cause).toBeUndefined();
+  ])("%s → AppError VALIDATION_FAILED", async (_label, patch) => {
+    const error: unknown = await parse(JSON.stringify({ ...PAYLOAD, ...patch })).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(AppError);
+    expect((error as AppError).code).toBe("VALIDATION_FAILED");
+    expect((error as AppError).cause).toBeUndefined();
+  });
+
+  it("body không phải JSON → AppError VALIDATION_FAILED", async () => {
+    await expect(parse("{")).rejects.toThrow(AppError);
+  });
+
+  // CLAUDE.md bất biến 3: không có đường nào đọc giao dịch từ body chưa qua verifyWebhook.
+  it("từ chối object tự dựng hay ép kiểu, kể cả khi body đúng định dạng", () => {
+    const adapter = payment();
+    const forged = [
+      { rawBody: BODY },
+      Object.freeze({ rawBody: BODY }),
+      // Cùng hình dạng với object thật (rỗng, đóng băng) nhưng không do verifyWebhook cấp.
+      Object.freeze({}),
+      BODY,
+      null,
+      undefined,
+    ] as unknown as VerifiedWebhook[];
+    for (const webhook of forged) {
+      expect(() => adapter.parseWebhook(webhook)).toThrow(TypeError);
     }
   });
 
-  it("body không phải JSON → AppError VALIDATION_FAILED", () => {
-    expect(() => payment().parseWebhook("{")).toThrow(AppError);
+  it("từ chối webhook do adapter KHÁC xác thực", async () => {
+    const webhook = await verified(payment(), BODY);
+    expect(() => payment().parseWebhook(webhook)).toThrow(TypeError);
+  });
+
+  it("không sửa được body sau khi đã xác thực", async () => {
+    const adapter = payment();
+    const webhook = await verified(adapter, BODY);
+    const tampered = BODY.replace("150000", "15000000");
+    expect(() => {
+      (webhook as unknown as { rawBody: string }).rawBody = tampered;
+    }).toThrow(TypeError);
+    expect(adapter.parseWebhook(webhook).amountVnd).toBe(150000);
   });
 });
 
 describe("payment/fake: listTransactions", () => {
-  const transactions = ["1", "2", "3", "4"].map((id) => ({
-    ...payment().parseWebhook(BODY),
+  const transactions: BankTransaction[] = ["1", "2", "3", "4"].map((id) => ({
     providerTransactionId: id,
+    gateway: "Vietcombank",
+    occurredAt: new Date("2026-10-19T02:00:00Z"),
+    accountNumber: "0123456789",
+    direction: "in",
+    amountVnd: 150000,
+    content: "TVM2345ABCD chuyen tien",
+    paymentCode: "TVM2345ABCD",
+    referenceCode: "FT26292000001",
   }));
 
   it("trả giao dịch theo thứ tự, sau sinceId, tối đa limit", async () => {

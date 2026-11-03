@@ -5,7 +5,9 @@ import { NotImplementedError } from "@/server/lib/errors";
 
 // Adapter SePay: chưa làm (làm ở giai đoạn 3 theo BUSINESS_RULES 5.3–5.6, đối chiếu tài liệu SePay
 // chính thức). Cho tới lúc đó mọi phương thức ném NotImplementedError: webhook không bao giờ được
-// coi là hợp lệ, không có giao dịch nào được trả về.
+// coi là hợp lệ, không có giao dịch nào được trả về. Khi làm: `verifyWebhook` cấp webhook đã xác
+// thực qua `createVerifiedWebhookRegistry` (port.ts) và `parseWebhook` đọc body qua `rawBodyOf`,
+// như adapter giả.
 
 export interface SepayConfig {
   readonly webhookSecret: string;

@@ -1,12 +1,12 @@
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CAPTCHA_ADAPTERS, selectCaptchaAdapter } from "@/server/adapters/captcha";
 import type { CaptchaPort } from "@/server/adapters/captcha/port";
 import { NOTIFIER_ADAPTERS, selectNotifierAdapter } from "@/server/adapters/notifier";
 import type { NotifierPort } from "@/server/adapters/notifier/port";
 import { PAYMENT_ADAPTERS, selectPaymentAdapter } from "@/server/adapters/payment";
-import type { PaymentProviderPort } from "@/server/adapters/payment/port";
+import type { PaymentProviderPort, VerifiedWebhook } from "@/server/adapters/payment/port";
 import {
   ADAPTER_PORT_NAMES,
   ADAPTER_PORTS,
@@ -49,7 +49,8 @@ type MethodCalls<Port> = {
 const PAYMENT_CALLS = {
   verifyWebhook: (adapter) =>
     adapter.verifyWebhook({ headers: new Headers({ "x-signature": "sha256=00" }), rawBody: "{}" }),
-  parseWebhook: (adapter) => adapter.parseWebhook('{"id":"1"}'),
+  parseWebhook: (adapter) =>
+    adapter.parseWebhook({ rawBody: '{"id":"1"}' } as unknown as VerifiedWebhook),
   listTransactions: (adapter) => adapter.listTransactions({ limit: 10 }),
 } satisfies MethodCalls<PaymentProviderPort>;
 
@@ -228,4 +229,27 @@ describe("adapter giả tự từ chối ở staging và production", () => {
     const config = { ...adapterEnv({ APP_ENV: appEnv }), [ADAPTER_PORTS[port].envVar]: provider };
     expect(() => create(config as AdapterEnv, {})).toThrow(`${port}/${provider} là adapter giả`);
   });
+
+  // APP_ENV nói "test" nhưng tiến trình đang chạy trên Vercel: factory vẫn tự từ chối.
+  it.each(ALL_PROVIDERS.filter(({ kind }) => kind === "fake"))(
+    "factory của $port/$provider khi VERCEL_ENV=production dù APP_ENV=test",
+    ({ port, provider }) => {
+      vi.stubEnv("VERCEL_ENV", "production");
+      try {
+        const create = PORT_CASES[port].registry[provider]?.create as unknown as (
+          config: AdapterEnv,
+          deps: AdapterDeps,
+        ) => unknown;
+        const config = {
+          ...adapterEnv({ APP_ENV: "test" }),
+          [ADAPTER_PORTS[port].envVar]: provider,
+        };
+        expect(() => create(config as AdapterEnv, {})).toThrow(
+          `${port}/${provider} là adapter giả, không được nạp trên bản deploy Vercel`,
+        );
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 });

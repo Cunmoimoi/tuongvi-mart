@@ -6,7 +6,10 @@ import path from "node:path";
  * - file test (`*.test.ts`, `*.test.tsx`, `*.test.mts`) và thư mục `tests/`;
  * - các file khác trong cùng thư mục `fakes/` đó.
  * Ngoài ra là lối tắt dùng adapter giả mà bỏ qua hàm chọn (CLAUDE.md bất biến 7, ARCHITECTURE mục 9).
- * Kiểm cả `import`, `export ... from`, `export * from` và `import("...")` với chuỗi cố định.
+ * Kiểm cả `import`, `export ... from`, `export * from`, `import(...)` và `require(...)`, với chuỗi
+ * cố định hoặc chuỗi template (phần biểu thức coi như `*`: `` `…/fakes/${name}` `` vẫn bị bắt).
+ * Đường dẫn tính hoàn toàn lúc chạy (`import(x)`) thì rule không biết được; lớp chặn trong factory
+ * của adapter giả vẫn áp dụng.
  *
  * @type {import("eslint").Rule.RuleModule}
  */
@@ -41,11 +44,23 @@ const rule = {
       return null;
     }
 
+    /** Chuỗi đường dẫn của `sourceNode`; chuỗi template thì phần biểu thức thành `*`. */
+    function sourceText(sourceNode) {
+      if (sourceNode?.type === "Literal" && typeof sourceNode.value === "string") {
+        return sourceNode.value;
+      }
+      if (sourceNode?.type === "TemplateLiteral") {
+        return sourceNode.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("*");
+      }
+      return null;
+    }
+
     function check(node, sourceNode) {
-      if (!sourceNode || sourceNode.type !== "Literal" || typeof sourceNode.value !== "string") {
+      const source = sourceText(sourceNode);
+      if (source === null) {
         return;
       }
-      const target = resolveSource(sourceNode.value);
+      const target = resolveSource(source);
       const match = target?.match(/^src\/server\/adapters\/([^/]+)\/fakes(?:\/|$)/);
       if (!match) {
         return;
@@ -56,7 +71,7 @@ const rule = {
         file === `src/server/adapters/${port}/index.ts` ||
         file.startsWith(`src/server/adapters/${port}/fakes/`);
       if (!allowed) {
-        context.report({ node, messageId: "forbidden", data: { source: sourceNode.value, port } });
+        context.report({ node, messageId: "forbidden", data: { source, port } });
       }
     }
 
@@ -65,6 +80,12 @@ const rule = {
       ExportNamedDeclaration: (node) => check(node, node.source),
       ExportAllDeclaration: (node) => check(node, node.source),
       ImportExpression: (node) => check(node, node.source),
+      // Chỉ `require(...)` gọi trực tiếp, không phải phương thức tên `require` của object khác.
+      CallExpression: (node) => {
+        if (node.callee.type === "Identifier" && node.callee.name === "require") {
+          check(node, node.arguments[0]);
+        }
+      },
     };
   },
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isProductionLike, parseEnv } from "@/server/env";
+import { isHostedDeployment, isProductionLike, parseEnv } from "@/server/env";
 
 function baseEnv(overrides: Record<string, string | undefined> = {}) {
   return {
@@ -252,6 +252,49 @@ describe("parseEnv: biến để trống", () => {
     expect(() => parseEnv(productionEnv({ SMS_PROVIDER: "console", CRON_SECRET: "" }))).toThrow(
       /SMS_PROVIDER/,
     );
+  });
+});
+
+// Lỡ đặt APP_ENV=local/test trên bản deploy (ví dụ chép nhầm .env.local lên Vercel) thì mọi adapter
+// giả đều qua được kiểm tra theo APP_ENV. VERCEL_ENV do Vercel tự đặt nên dùng làm tín hiệu độc lập.
+describe("parseEnv: APP_ENV đối chiếu với VERCEL_ENV", () => {
+  it.each(["production", "preview", "custom-env"])(
+    "VERCEL_ENV=%s mà APP_ENV là local hoặc test thì ném lỗi",
+    (vercelEnv) => {
+      for (const appEnv of ["local", "test"]) {
+        expect(() => parseEnv(baseEnv({ APP_ENV: appEnv, VERCEL_ENV: vercelEnv }))).toThrow(
+          /APP_ENV.*Vercel/,
+        );
+      }
+    },
+  );
+
+  it.each(["production", "preview"])(
+    "VERCEL_ENV=%s với APP_ENV=production vẫn hợp lệ",
+    (vercelEnv) => {
+      expect(parseEnv(productionEnv({ VERCEL_ENV: vercelEnv })).APP_ENV).toBe("production");
+    },
+  );
+
+  it.each([undefined, "", "development"])(
+    "VERCEL_ENV=%j (máy dev) với APP_ENV=local vẫn hợp lệ",
+    (vercelEnv) => {
+      expect(parseEnv(baseEnv({ APP_ENV: "local", VERCEL_ENV: vercelEnv })).APP_ENV).toBe("local");
+    },
+  );
+});
+
+describe("isHostedDeployment", () => {
+  it.each([
+    ["production", true],
+    ["preview", true],
+    // Giá trị lạ (Vercel thêm loại môi trường mới) coi là bản deploy: đóng cửa khi lỗi.
+    ["custom-env", true],
+    ["development", false],
+    ["", false],
+    [undefined, false],
+  ] as const)("VERCEL_ENV=%j → %s", (vercelEnv, expected) => {
+    expect(isHostedDeployment(vercelEnv)).toBe(expected);
   });
 });
 

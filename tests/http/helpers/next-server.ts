@@ -57,7 +57,10 @@ export async function startNextServer(env: Record<string, string>): Promise<Runn
     [NEXT_BIN, "start", "-p", String(port), "-H", "127.0.0.1"],
     {
       cwd: PROJECT_ROOT,
-      env: { ...process.env, ...env, NODE_ENV: "production" },
+      // VERCEL_ENV của máy chạy test (hay của `.env.local` do `vercel env pull` tạo) làm `env.ts` từ
+      // chối APP_ENV=local/test (ARCHITECTURE mục 9). Đặt rỗng (coi như chưa đặt) thay vì xóa, để Next
+      // không nạp lại từ file; test nào cần giá trị cụ thể thì tự truyền qua `env`.
+      env: { ...process.env, VERCEL_ENV: "", ...env, NODE_ENV: "production" },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     },

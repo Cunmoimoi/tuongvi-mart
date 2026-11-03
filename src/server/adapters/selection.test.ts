@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { selectCaptchaAdapter } from "@/server/adapters/captcha";
 import { selectNotifierAdapter } from "@/server/adapters/notifier";
 import { selectPaymentAdapter } from "@/server/adapters/payment";
@@ -203,6 +203,51 @@ describe("(b) adapter giả ở staging và production", () => {
       expect(() => SELECTORS[port](configFor(port, provider, appEnv))).toThrow(
         `${envVar}=${provider} là adapter giả`,
       );
+    },
+  );
+});
+
+// (e) Tín hiệu độc lập với APP_ENV: lỡ đặt APP_ENV=local/test trên bản deploy Vercel thì adapter
+// giả vẫn không tạo được. Hàm chọn và factory đọc thẳng `process.env.VERCEL_ENV` (Vercel tự đặt),
+// không tin cấu hình được truyền vào.
+describe("(e) adapter giả trên bản deploy Vercel", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const hostedCases = FAKE_CASES.flatMap((testCase) =>
+    // `custom-env` đại diện cho giá trị Vercel có thể thêm sau này: mặc định coi là bản deploy.
+    ["production", "preview", "custom-env"].flatMap((vercelEnv) =>
+      (["local", "test"] as const).map((appEnv) => ({ ...testCase, vercelEnv, appEnv })),
+    ),
+  );
+
+  it.each(hostedCases)(
+    "VERCEL_ENV=$vercelEnv, APP_ENV=$appEnv: $envVar=$provider bị từ chối",
+    ({ port, provider, vercelEnv, appEnv }) => {
+      vi.stubEnv("VERCEL_ENV", vercelEnv);
+      expect(() => SELECTORS[port](configFor(port, provider, appEnv))).toThrow(AdapterConfigError);
+      expect(() => SELECTORS[port](configFor(port, provider, appEnv))).toThrow(/Vercel/);
+    },
+  );
+
+  it.each(
+    FAKE_CASES.flatMap((testCase) =>
+      ["development", ""].map((vercelEnv) => ({ ...testCase, vercelEnv })),
+    ),
+  )(
+    "VERCEL_ENV=$vercelEnv (máy dev, `vercel env pull`): $envVar=$provider vẫn nạp được",
+    ({ port, provider, vercelEnv }) => {
+      vi.stubEnv("VERCEL_ENV", vercelEnv);
+      expect(SELECTORS[port](configFor(port, provider, "local")).provider).toBe(provider);
+    },
+  );
+
+  it.each(CASES.filter(({ kind }) => kind === "real"))(
+    "VERCEL_ENV=production: adapter thật $envVar=$provider không bị ảnh hưởng",
+    ({ port, provider }) => {
+      vi.stubEnv("VERCEL_ENV", "production");
+      expect(SELECTORS[port](configFor(port, provider, "production")).provider).toBe(provider);
     },
   );
 });

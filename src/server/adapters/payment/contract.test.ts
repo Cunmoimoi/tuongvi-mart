@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { selectPaymentAdapter } from "@/server/adapters/payment";
+import type { PaymentProviderPort, VerifiedWebhook } from "@/server/adapters/payment/port";
 import { providerKind, providerNames } from "@/server/adapters/providers";
 import { FAKE_ADAPTER_APP_ENVS } from "@/server/adapters/select";
 import type { AppEnv } from "@/server/env";
@@ -61,6 +62,23 @@ function build(provider: string, appEnv: AppEnv) {
   return { adapter, network };
 }
 
+/**
+ * Webhook đã được `adapter` xác thực nếu adapter làm được (ký đúng bằng secret test), ngược lại
+ * (adapter chưa làm xong) là object tự dựng: đằng nào `parseWebhook` cũng phải từ chối body sai.
+ */
+async function verifiedOrForged(adapter: PaymentProviderPort, body: string) {
+  const headers = signedHeaders(TEST_SECRETS.SEPAY_WEBHOOK_SECRET, body);
+  const outcome = await settle(() => adapter.verifyWebhook({ headers, rawBody: body }));
+  if (outcome.ok && outcome.value.ok) {
+    return outcome.value.webhook;
+  }
+  return forged(body);
+}
+
+function forged(body: string): VerifiedWebhook {
+  return { rawBody: body } as unknown as VerifiedWebhook;
+}
+
 /** Không bao giờ được xác nhận là hợp lệ: hoặc `ok: false`, hoặc NotImplementedError. */
 function expectRejected(outcome: Outcome<{ ok: boolean }>) {
   if (outcome.ok) {
@@ -102,9 +120,20 @@ describe.each(CASES)("hợp đồng payment/$provider (APP_ENV=$appEnv)", ({ pro
     "parseWebhook từ chối body sai định dạng: %j",
     async (rawBody) => {
       const { adapter } = build(provider, appEnv);
-      expect((await settle(() => adapter.parseWebhook(rawBody))).ok).toBe(false);
+      const webhook = await verifiedOrForged(adapter, rawBody);
+      expect((await settle(() => adapter.parseWebhook(webhook))).ok).toBe(false);
     },
   );
+
+  // CLAUDE.md bất biến 3: body đúng định dạng nhưng chưa qua verifyWebhook của CHÍNH adapter này
+  // thì không bao giờ thành giao dịch.
+  it("parseWebhook từ chối webhook tự dựng hoặc do adapter khác xác thực", async () => {
+    const { adapter } = build(provider, appEnv);
+    const other = build(provider, appEnv).adapter;
+    for (const webhook of [forged(BODY), await verifiedOrForged(other, BODY)]) {
+      expect((await settle(() => adapter.parseWebhook(webhook))).ok).toBe(false);
+    }
+  });
 
   it.each([0, -1, 101, 1.5])("listTransactions từ chối limit=%s", async (limit) => {
     const { adapter } = build(provider, appEnv);
@@ -117,7 +146,7 @@ describe.each(CASES)("hợp đồng payment/$provider (APP_ENV=$appEnv)", ({ pro
       await settle(() =>
         adapter.verifyWebhook({ headers: signedHeaders("x", BODY), rawBody: BODY }),
       ),
-      await settle(() => adapter.parseWebhook("{")),
+      await settle(() => adapter.parseWebhook(forged("{"))),
       await settle(() => adapter.listTransactions({ limit: 500 })),
       await settle(() => adapter.listTransactions({ limit: 10 })),
     ];

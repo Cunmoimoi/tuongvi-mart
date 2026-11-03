@@ -2,11 +2,13 @@ import "server-only";
 import { createHmac } from "node:crypto";
 import { z } from "zod";
 import {
+  createVerifiedWebhookRegistry,
   MAX_TRANSACTIONS_PER_PAGE,
   WEBHOOK_MAX_SKEW_SECONDS,
   type BankTransaction,
   type PaymentProviderPort,
   type TransactionQuery,
+  type VerifiedWebhook,
   type WebhookRequest,
   type WebhookVerification,
 } from "@/server/adapters/payment/port";
@@ -59,6 +61,7 @@ export function createFakePayment(options: FakePaymentOptions): PaymentProviderP
   const { webhookSecret } = options;
   const clock = options.clock ?? systemClock;
   const transactions = [...(options.transactions ?? [])];
+  const verified = createVerifiedWebhookRegistry();
 
   return {
     provider: "fake",
@@ -80,10 +83,11 @@ export function createFakePayment(options: FakePaymentOptions): PaymentProviderP
       ) {
         return { ok: false, reason: "stale-timestamp" };
       }
-      return { ok: true };
+      return { ok: true, webhook: verified.issue(rawBody) };
     },
 
-    parseWebhook(rawBody: string): BankTransaction {
+    parseWebhook(webhook: VerifiedWebhook): BankTransaction {
+      const rawBody = verified.rawBodyOf(webhook);
       let json: unknown;
       try {
         json = JSON.parse(rawBody);

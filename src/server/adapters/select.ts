@@ -5,7 +5,7 @@ import {
   type AdapterPortName,
   type ProviderName,
 } from "@/server/adapters/providers";
-import type { AppEnv } from "@/server/env";
+import { isHostedDeployment, type AppEnv } from "@/server/env";
 import type { Clock } from "@/server/lib/clock";
 import { AdapterConfigError } from "@/server/lib/errors";
 
@@ -15,6 +15,8 @@ import { AdapterConfigError } from "@/server/lib/errors";
  * 2. `selectAdapter` (file này) từ chối lần nữa, dù cấu hình không đi qua env.ts.
  * 3. Factory của từng adapter giả tự gọi `assertFakeAdapterAllowed` khi được tạo.
  * Lớp 2 và 3 dùng danh sách CHO PHÉP: APP_ENV mới thêm sau này mặc định bị từ chối.
+ * Cả ba lớp cùng dựa vào APP_ENV, nên lớp 2 và 3 còn đọc thẳng `process.env.VERCEL_ENV` (Vercel tự
+ * đặt, không đi qua cấu hình được truyền vào): lỡ đặt APP_ENV=local trên bản deploy vẫn bị chặn.
  */
 
 export const FAKE_ADAPTER_APP_ENVS: readonly AppEnv[] = ["local", "test"];
@@ -23,6 +25,11 @@ export function assertFakeAdapterAllowed(appEnv: AppEnv, adapterId: string): voi
   if (!FAKE_ADAPTER_APP_ENVS.includes(appEnv)) {
     throw new AdapterConfigError(
       `${adapterId} là adapter giả, chỉ được nạp khi APP_ENV là ${FAKE_ADAPTER_APP_ENVS.join(" hoặc ")} (đang là ${appEnv})`,
+    );
+  }
+  if (isHostedDeployment(process.env.VERCEL_ENV)) {
+    throw new AdapterConfigError(
+      `${adapterId} là adapter giả, không được nạp trên bản deploy Vercel (VERCEL_ENV khác development)`,
     );
   }
 }
