@@ -5,7 +5,7 @@ Cập nhật file này trong cùng PR khi kết thúc mỗi task. Chi tiết t�
 ## Bàn giao nhanh
 
 - **Task kế tiếp**: T0.8 phần B (khung storefront, khung admin, Card/Pagination/ConfirmDialog), rồi **Cổng duyệt 1**, rồi T1.1. T0.9 làm trước T0.8 phần B theo yêu cầu của chủ dự án (19/10/2026); hai task không phụ thuộc nhau.
-- **Số test sau T0.9**: unit (`pnpm test`) 957 test / 43 file (trước T0.9: 408 / 28, thêm 549 test, 15 file); `pnpm test:http` 37; `pnpm test:int` 48.
+- **Số test sau T0.9**: unit (`pnpm test`) 1057 test / 43 file (trước T0.9: 408 / 28, thêm 649 test, 15 file; trong đó 100 test thêm khi sửa sau hai lượt review 02/11/2026); `pnpm test:http` 37; `pnpm test:int` 48.
 - **Chủ dự án cần làm trên máy**: thêm `NOTIFIER_PROVIDER=noop` vào `.env.local` (biến mới, bắt buộc; thiếu thì `pnpm dev` báo lỗi cấu hình ở mọi trang). Soát diff `.env.example` của PR T0.9 (Claude Code sửa bằng lệnh, không đọc file, N44).
 
 ## Giai đoạn 0
@@ -93,6 +93,14 @@ Ngoài roadmap:
   - Hợp đồng chung `adapters/<port>/contract.test.ts` chạy cho mọi adapter; test riêng cho từng adapter giả; `notifier/port.test.ts` (che SĐT, địa chỉ, khóa nhạy cảm); `storage/port.test.ts` (bucket, đường dẫn); `fake-imports.lint.test.ts` (chạy ESLint thật).
 - Đã cố tình phá rồi khôi phục (không commit): `sepay.verifyWebhook` trả `{ ok: true }` → 20 test đỏ (4 ở test quét, 16 ở hợp đồng payment); gỡ lớp 2 trong `selectAdapter` → 10 test đỏ; gỡ kiểm adapter giả trong `env.ts` → 22 test đỏ; gỡ tự chặn trong factory `sms/console` → 4 test đỏ; thêm file `sms/vnpt.ts` chưa đăng ký → test quét đỏ; `export ... from` adapter giả trong `src/server/dev-ui.ts` → `pnpm lint` báo lỗi.
 - Không thêm dependency, không gọi mạng (test truyền `fetch` giả và kiểm không có request nào).
+- Sửa sau review bảo mật (02/11/2026):
+  - Tín hiệu độc lập với `APP_ENV`: `VERCEL_ENV` khác `development` mà `APP_ENV` là `local`/`test` thì `env.ts` không cho khởi động, và `assertFakeAdapterAllowed` (lớp 2 và 3) tự đọc `process.env.VERCEL_ENV` nên adapter giả không tạo được (N47).
+  - `parseWebhook(webhook: VerifiedWebhook)` chỉ nhận object do `verifyWebhook` của chính adapter cấp (N48).
+  - `formatOwnerAlert`: ép mỗi phần về một dòng (thay ký tự điều khiển, bidi, zero-width, phân cách dòng Unicode bằng dấu cách), ẩn hẳn tọa độ, cắt tin dài quá 4000 ký tự (N49).
+  - ESLint `local/no-fake-adapter-import` bắt thêm `require(...)` và chuỗi template.
+  - Hai test chạy ESLint thật (`fake-imports.lint.test.ts`, `no-bare-img.test.ts`) nạp ESLint trước trong `beforeAll`: lần lint đầu mất vài giây và đã làm `pnpm check` đỏ vì quá 5 giây khi chạy cả bộ.
+  - Review lần hai (02/11/2026) sửa bốn lỗi do chính lượt sửa trên gây ra: `VerifiedWebhook` từng mang `rawBody` nên ghi log kết quả xác thực lộ nguyên body (nay body nằm trong `WeakMap` của sổ); test đơn vị phụ thuộc `VERCEL_ENV` của máy chạy (đặt `VERCEL_ENV=preview` thì 143 test đỏ; nay `tests/setup/hermetic-env.ts` xóa biến này, `test:http` đặt rỗng); SĐT chèn ký tự vô hình hiện rõ `0901 234567` vì che trước khi ép một dòng (nay che lại sau); ẩn tọa độ khớp chuỗi con nên ẩn nhầm `storeLocation`, `stockAllocation`, `coordinatorName` (nay so theo từ, khóa mơ hồ chỉ ẩn khi giá trị giống tọa độ). Ghi thêm điều kiện của `VERCEL_ENV` và hành vi mới của `vercel env pull` vào N47. Phá thử: body lại nằm trên object webhook → 2 test đỏ; bỏ xóa `VERCEL_ENV` trong setup khi shell có `preview` → 144; che SĐT trước khi ép một dòng → 4; không làm sạch từng chuỗi trước `JSON.stringify` → 8; khóa mơ hồ luôn ẩn → 1, không bao giờ ẩn → 3; bỏ ghép hai từ → 3.
+  - Đã cố tình phá rồi khôi phục (không commit): bỏ kiểm `VERCEL_ENV` trong `select.ts` → 35 test đỏ, trong `env.ts` → 3; `parseWebhook` nhận mọi object → 4; bỏ ép một dòng → 8; bỏ ẩn tọa độ → 1; bỏ cắt bớt → 2; rule ESLint bỏ `require` → 2, bỏ chuỗi template → 3.
 
 ## Quyết định đã chốt (T0.6)
 
@@ -150,4 +158,4 @@ Ngoài roadmap:
 - T0.9: staging/production bắt buộc Telegram (`OWNER_ALERT_TELEGRAM_*`), nên phải tạo bot trước khi dựng staging (đã thêm vào "Việc bạn cần làm" trong `docs/README.md`).
 - T0.9: logger chung chưa che địa chỉ (SECURITY mục "Log và dữ liệu cá nhân" yêu cầu không log địa chỉ đầy đủ); hiện chỉ notifier che. Khi có dữ liệu địa chỉ (T1.4) cân nhắc che theo khóa trong `sanitizeForLog`, lưu ý hàm này cũng dùng cho audit `before`/`after` (N32), cần chủ dự án quyết.
 - T0.9: `sms/console` không in OTP khi `APP_ENV=test`, nên E2E đăng nhập bằng OTP (T1.x) cần cách khác để lấy mã (ví dụ hook test riêng), không được nới adapter này.
-- T0.9: chưa có code nghiệp vụ nào gọi `getPayment()`, `getSms()`... Webhook SePay (giai đoạn 3) gọi `getPayment().verifyWebhook` trước `parseWebhook`; nơi gọi captcha coi mọi lỗi là "không qua".
+- T0.9: chưa có code nghiệp vụ nào gọi `getPayment()`, `getSms()`... Webhook SePay (giai đoạn 3) đưa `webhook` mà `getPayment().verifyWebhook` trả về vào `parseWebhook` (kiểu và sổ trong `payment/port.ts` bắt buộc thứ tự này, N48); adapter SePay khi làm phải dùng `createVerifiedWebhookRegistry` như adapter giả; nơi gọi captcha coi mọi lỗi là "không qua".

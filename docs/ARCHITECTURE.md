@@ -265,7 +265,8 @@ export function getSms(): SmsPort; // code nghiệp vụ gọi hàm này; chọn
 | `AuthPort` (bọc Supabase Auth) | | làm ở T1.1 | |
 
 Quy tắc:
-- Adapter giả chỉ nạp được khi `APP_ENV` là `local` hoặc `test`, chặn ở ba lớp: (1) `env.ts` không cho ứng dụng khởi động khi staging/production cấu hình adapter giả; (2) `selectAdapter` (`adapters/select.ts`) từ chối lần nữa theo danh sách CHO PHÉP `local`/`test`, dù cấu hình không đi qua `env.ts`; (3) factory của từng adapter giả tự gọi `assertFakeAdapterAllowed`. Mã adapter giả vẫn nằm trong bản build (index.ts import tĩnh) nhưng không tạo được ngoài local/test.
+- Adapter giả chỉ nạp được khi `APP_ENV` là `local` hoặc `test`, chặn ở ba lớp: (1) `env.ts` không cho ứng dụng khởi động khi staging/production cấu hình adapter giả; (2) `selectAdapter` (`adapters/select.ts`) từ chối lần nữa theo danh sách CHO PHÉP `local`/`test`, dù cấu hình không đi qua `env.ts`; (3) factory của từng adapter giả tự gọi `assertFakeAdapterAllowed`. Mã adapter giả vẫn nằm trong bản build (index.ts import tĩnh) nhưng không tạo được ngoài local/test. Vì cả ba lớp cùng dựa vào `APP_ENV`, có thêm tín hiệu độc lập `VERCEL_ENV` (Vercel tự đặt): `env.ts` không cho khởi động khi `APP_ENV` là `local`/`test` trên bản deploy Vercel (`VERCEL_ENV` khác `development`), và `assertFakeAdapterAllowed` tự đọc `process.env.VERCEL_ENV` (N47).
+- `parseWebhook` chỉ nhận `VerifiedWebhook` do `verifyWebhook` của chính adapter đó cấp (kiểu có nhãn lúc biên dịch, sổ `WeakMap` lúc chạy qua `createVerifiedWebhookRegistry`); object tự dựng, ép kiểu hay của adapter khác bị từ chối. Object đó rỗng, body nằm trong sổ, nên ghi log kết quả xác thực không lộ body (N48).
 - Adapter giả chỉ được import từ `index.ts` của chính port đó và từ test (ESLint `local/no-fake-adapter-import`). Code nghiệp vụ dùng `getPayment()`, `getSms()`, `getStorage()`, `getCaptcha()`, `getNotifier()`.
 - Adapter chưa làm xong (`status: "not-implemented"` trong bảng của index.ts) ném `NotImplementedError` (`server/lib/errors.ts`) ở MỌI phương thức, không bao giờ trả thành công hay giá trị rỗng giả.
 - Không có "tự động chuyển về mock khi thiếu key". Adapter thật đã chọn mà thiếu biến của nó thì hàm chọn ném `AdapterConfigError`; thiếu key ở staging/production thì ứng dụng không khởi động. Giá trị `*_PROVIDER` không có trong bảng thì `env.ts` từ chối.
@@ -296,6 +297,7 @@ Môi trường: `local` (máy dev + `supabase start`; dùng được cả SePay 
 | `VIEW_TOKEN_PEPPER` | server | khóa HMAC để băm view token của khách vãng lai |
 | `CRON_SECRET` | server | |
 | `SENTRY_DSN` | server + public | DSN không phải secret |
+| `VERCEL_ENV` | server | do Vercel tự đặt, không khai báo trong `.env`; `APP_ENV` là `local`/`test` mà `VERCEL_ENV` khác `development` thì ứng dụng không khởi động và adapter giả không tạo được (mục 9). Cần project Vercel bật "Automatically expose System Environment Variables" (N47) |
 | `OWNER_ALERT_TELEGRAM_BOT_TOKEN`, `OWNER_ALERT_TELEGRAM_CHAT_ID` | server | kênh cảnh báo cho chủ shop qua Telegram; bắt buộc ở staging/production vì notifier `noop` là adapter giả |
 
 `env.ts` phải có test: thiếu biến bắt buộc hoặc cấu hình mock ở production thì `parse` báo lỗi.
