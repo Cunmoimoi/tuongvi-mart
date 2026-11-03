@@ -1,6 +1,6 @@
 import path from "node:path";
 import { ESLint } from "eslint";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 // Chạy ESLint thật với eslint.config.mjs của dự án trên đoạn mã mẫu (không ghi file nào).
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "../../..");
@@ -10,6 +10,12 @@ async function lint(code: string, filePath = "src/components/shop/sample.tsx") {
   const [result] = await eslint.lintText(code, { filePath: path.join(PROJECT_ROOT, filePath) });
   return result?.messages ?? [];
 }
+
+// Lần lint đầu tiên nạp cấu hình và plugin mất vài giây, lâu hơn khi chạy cùng cả bộ test. Nạp
+// trước ở đây với thời hạn riêng để từng test không vượt mức 5 giây mặc định.
+beforeAll(async () => {
+  await lint("export {};\n");
+}, 60_000);
 
 describe("ESLint cấm <img> trần cho ảnh nội dung", () => {
   it("file chứa <img> trần bị báo lỗi (mức error)", async () => {

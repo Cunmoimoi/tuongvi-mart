@@ -30,6 +30,20 @@ Yêu cầu: Node.js LTS, pnpm, Docker Desktop (cho Supabase local).
    Mật khẩu tự chọn cần ít nhất 12 ký tự và chỉ dùng chữ, số, `_`, `.`, `~`, `-`.
    Nó chỉ tồn tại trên máy bạn; không có mật khẩu nào nằm trong file được commit.
 
+   Ở local, dịch vụ ngoài dùng adapter giả (chỉ chạy được khi `APP_ENV=local` hoặc `test`,
+   xem `docs/ARCHITECTURE.md` mục 9):
+
+   ```
+   APP_ENV=local
+   PAYMENT_PROVIDER=fake
+   SMS_PROVIDER=console
+   CAPTCHA_PROVIDER=always-pass
+   STORAGE_PROVIDER=memory
+   NOTIFIER_PROVIDER=noop
+   ```
+
+   `PAYMENT_PROVIDER=fake` cần thêm `SEPAY_WEBHOOK_SECRET` (một chuỗi bất kỳ, dùng để ký webhook giả).
+
 3. Khởi động database local (cần Docker Desktop đang chạy):
 
    ```

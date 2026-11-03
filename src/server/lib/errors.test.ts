@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  AdapterConfigError,
   AppError,
   ERROR_MESSAGES,
   isAppError,
+  NotImplementedError,
   toAppError,
   type ErrorCode,
 } from "@/server/lib/errors";
@@ -104,5 +106,34 @@ describe("isAppError và toAppError", () => {
   it("toAppError xử lý cả giá trị không phải Error", () => {
     expect(toAppError("chuỗi bất kỳ").code).toBe("INTERNAL");
     expect(toAppError(undefined).code).toBe("INTERNAL");
+  });
+});
+
+// ARCHITECTURE mục 9: adapter chưa làm xong ném NotImplementedError, không bao giờ trả thành công.
+describe("NotImplementedError", () => {
+  it("có tên riêng và ghi rõ phần chưa hiện thực", () => {
+    const error = new NotImplementedError("payment/sepay.verifyWebhook");
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("NotImplementedError");
+    expect(error.feature).toBe("payment/sepay.verifyWebhook");
+    expect(error.message).toContain("payment/sepay.verifyWebhook");
+  });
+
+  it("không phải AppError: ra tới client chỉ còn INTERNAL 500", () => {
+    const error = new NotImplementedError("sms/esms.sendOtp");
+    expect(isAppError(error)).toBe(false);
+    const converted = toAppError(error);
+    expect(converted.code).toBe("INTERNAL");
+    expect(converted.message).not.toContain("esms");
+  });
+});
+
+describe("AdapterConfigError", () => {
+  it("là lỗi cấu hình nội bộ, không phải AppError", () => {
+    const error = new AdapterConfigError("SMS_PROVIDER không hợp lệ");
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("AdapterConfigError");
+    expect(isAppError(error)).toBe(false);
+    expect(toAppError(error).message).toBe(ERROR_MESSAGES.INTERNAL);
   });
 });

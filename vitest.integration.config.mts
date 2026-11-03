@@ -37,6 +37,7 @@ export default defineConfig({
     environment: "node",
     reporters: reporters(),
     include: ["tests/integration/**/*.test.ts"],
+    setupFiles: ["./tests/setup/hermetic-env.ts"],
     // Các test dùng chung một database và đều tạo/xóa bảng trong schema app.
     fileParallelism: false,
     testTimeout: 30_000,

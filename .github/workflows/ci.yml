@@ -36,6 +36,7 @@ env:
   SMS_PROVIDER: console
   CAPTCHA_PROVIDER: always-pass
   STORAGE_PROVIDER: memory
+  NOTIFIER_PROVIDER: noop
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:

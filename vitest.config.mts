@@ -24,6 +24,7 @@ export default defineConfig({
           name: "server",
           environment: "node",
           include: ["src/server/**/*.test.{ts,tsx}", "src/proxy.test.ts"],
+          setupFiles: ["./tests/setup/hermetic-env.ts"],
         },
       },
       {
